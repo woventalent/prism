@@ -1,10 +1,8 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-// Use PG_DATABASE_URL (custom secret pointing to the online PostgreSQL DB)
-const connStr = process.env.PG_DATABASE_URL || process.env.DATABASE_URL;
 const pool = new Pool({
-  connectionString: connStr,
+  connectionString: process.env.DATABASE_URL,
   ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
 });
 
