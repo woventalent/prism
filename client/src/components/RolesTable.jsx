@@ -21,7 +21,7 @@ export default function RolesTable({ roles, onSelect, onDelete, selectedId }) {
         <table style={{ width:'100%', borderCollapse:'collapse' }}>
           <thead>
             <tr style={{ background:'#f5f3e8' }}>
-              {['#','Role / Qualification','Experience','HC','CTC Budget','Filled','Pipeline','Difficulty','Avg TTF','Actions'].map(h => (
+              {['#','Role / Qualification','Experience','HC','CTC Budget','Filled','Pipeline','Difficulty','Avg TTF',''].map(h => (
                 <th key={h} style={{ padding:'12px 16px', textAlign:'left', fontSize:11, fontWeight:700, color:'#00259C', textTransform:'uppercase', letterSpacing:0.5, borderBottom:'1px solid #e2e0d4', whiteSpace:'nowrap' }}>{h}</th>
               ))}
             </tr>
@@ -33,8 +33,9 @@ export default function RolesTable({ roles, onSelect, onDelete, selectedId }) {
               const isSelected = selectedId === r.id;
               return (
                 <tr key={r.id}
-                  style={{ borderBottom:'1px solid #f0ede0', background: isSelected ? '#f0f4ff' : 'transparent', transition:'background 0.1s' }}
-                  onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#faf9f3'; }}
+                  onClick={() => onSelect(r.id === selectedId ? null : r.id)}
+                  style={{ borderBottom:'1px solid #f0ede0', background: isSelected ? '#f0f4ff' : 'transparent', transition:'background 0.15s', cursor:'pointer' }}
+                  onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#f0f4ff'; }}
                   onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
                 >
                   <td style={{ padding:'13px 16px', color:'#bbb', fontSize:12 }}>{i + 1}</td>
@@ -60,21 +61,13 @@ export default function RolesTable({ roles, onSelect, onDelete, selectedId }) {
                     </span>
                   </td>
                   <td style={{ padding:'13px 16px', fontSize:12, color:'#666' }}>{r.avg_ttf_days ? `${r.avg_ttf_days}d` : '—'}</td>
-                  <td style={{ padding:'13px 16px' }}>
-                    <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                  <td style={{ padding:'13px 16px' }} onClick={e => e.stopPropagation()}>
+                    {onDelete && (
                       <button
-                        onClick={() => onSelect(r.id === selectedId ? null : r.id)}
-                        style={{ padding:'5px 12px', borderRadius:6, border:'none', background:'#e8edfa', color:'#00259C', fontWeight:700, fontSize:12, cursor:'pointer', fontFamily:'Outfit,sans-serif' }}
-                      >
-                        {isSelected ? 'Close' : 'Details →'}
-                      </button>
-                      {onDelete && (
-                        <button
-                          onClick={() => onDelete(r.id)}
-                          style={{ padding:'5px 10px', borderRadius:6, border:'none', background:'#fee2e2', color:'#dc2626', fontWeight:700, fontSize:12, cursor:'pointer', fontFamily:'Outfit,sans-serif' }}
-                        >✕</button>
-                      )}
-                    </div>
+                        onClick={() => onDelete(r.id)}
+                        style={{ padding:'5px 10px', borderRadius:6, border:'none', background:'#fee2e2', color:'#dc2626', fontWeight:700, fontSize:12, cursor:'pointer', fontFamily:'Outfit,sans-serif' }}
+                      >✕</button>
+                    )}
                   </td>
                 </tr>
               );
