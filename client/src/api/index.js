@@ -55,4 +55,8 @@ export const createUser       = (body)       => api.post('/users', body).then(r 
 export const updateUser       = (id, body)   => api.patch(`/users/${id}`, body).then(r => r.data);
 export const deleteUser       = (id)          => api.delete(`/users/${id}`).then(r => r.data);
 
+// ── Knowledge Base ────────────────────────────────────────────
+export const getKnowledge     = (section)    => api.get(`/knowledge/${section}`).then(r => r.data);
+export const saveKnowledge    = (section, body) => api.put(`/knowledge/${section}`, body).then(r => r.data);
+
 export default api;

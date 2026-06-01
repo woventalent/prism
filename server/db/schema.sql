@@ -75,6 +75,14 @@ CREATE TABLE IF NOT EXISTS approvals (
               CHECK (status IN ('pending','approved'))
 );
 
+-- ─── Knowledge Base ─────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS knowledge_base (
+  id         SERIAL PRIMARY KEY,
+  section    VARCHAR(100) UNIQUE NOT NULL,
+  data       JSONB NOT NULL DEFAULT '{}',
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ─── Auto-update updated_at ──────────────────────────────────
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER AS $$
