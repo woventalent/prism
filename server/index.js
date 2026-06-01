@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
+const path    = require('path');
 
 const authRoutes      = require('./routes/auth');
 const rolesRoutes     = require('./routes/roles');
@@ -20,7 +21,7 @@ app.use((req, _res, next) => {
   next();
 });
 
-// ── Routes ─────────────────────────────────────────────────────
+// ── API Routes ─────────────────────────────────────────────────
 app.use('/api/auth',      authRoutes);
 app.use('/api/roles',     rolesRoutes);
 app.use('/api/users',     usersRoutes);
@@ -29,8 +30,14 @@ app.use('/api/knowledge', knowledgeRoutes);
 // Health check
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', ts: new Date() }));
 
-// ── 404 fallback ───────────────────────────────────────────────
-app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
+// ── Serve React static build ───────────────────────────────────
+const clientDist = path.join(__dirname, '..', 'client', 'dist');
+app.use(express.static(clientDist));
+
+// SPA fallback — serve index.html for all non-API routes
+app.get('*', (_req, res) => {
+  res.sendFile(path.join(clientDist, 'index.html'));
+});
 
 // ── Error handler ──────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
