@@ -43,7 +43,7 @@ export default function Layout() {
         <nav style={s.nav}>
           <NavLink to="/" end style={({ isActive }) => s.navLink(isActive)}>Dashboard</NavLink>
           <NavLink to="/knowledge" style={({ isActive }) => s.navLink(isActive)}>Knowledge Base</NavLink>
-          {isAdmin && <NavLink to="/users" style={({ isActive }) => s.navLink(isActive)}>Users</NavLink>}
+          <NavLink to="/settings" style={({ isActive }) => s.navLink(isActive)}>⚙ Settings</NavLink>
         </nav>
 
         <div style={s.userChip}>

@@ -18,7 +18,7 @@ const btn = (color, bg, border) => ({
 
 export default function CompanyProfile({ printRef }) {
   const { user } = useAuth();
-  const canEdit = user?.role === 'admin' || user?.role === 'recruiter';
+  const canEdit = user?.role === 'admin';
   const [data, setData]       = useState(null);
   const [saving, setSaving]   = useState(false);
   const [saved, setSaved]     = useState(false);
