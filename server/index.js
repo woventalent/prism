@@ -7,6 +7,7 @@ const authRoutes      = require('./routes/auth');
 const rolesRoutes     = require('./routes/roles');
 const usersRoutes     = require('./routes/users');
 const knowledgeRoutes = require('./routes/knowledge');
+const clientsRoutes   = require('./routes/clients');
 
 const app  = express();
 const PORT = process.env.PORT || 4000;
@@ -23,6 +24,7 @@ app.use((req, _res, next) => {
 
 // ── API Routes ─────────────────────────────────────────────────
 app.use('/api/auth',      authRoutes);
+app.use('/api/clients',   clientsRoutes);
 app.use('/api/roles',     rolesRoutes);
 app.use('/api/users',     usersRoutes);
 app.use('/api/knowledge', knowledgeRoutes);

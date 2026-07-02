@@ -1,17 +1,18 @@
 const router = require('express').Router();
 const pool   = require('../db');
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticate, requireClientAccess, requireClientAdmin } = require('../middleware/auth');
 
 router.use(authenticate);
+router.use(requireClientAccess);
 
-// ─── Helper: fetch a full role by id ─────────────────────────
-async function fetchRole(client, id) {
+// ─── Helper: fetch a full role by id (within the client) ─────
+async function fetchRole(client, id, clientId) {
   const { rows: role } = await client.query(
     `SELECT r.*,
             row_to_json(l.*) AS lifecycle
      FROM recruitment_roles r
      LEFT JOIN lifecycle l ON l.role_id = r.id
-     WHERE r.id = $1`, [id]
+     WHERE r.id = $1 AND r.client_id = $2`, [id, clientId]
   );
   if (!role[0]) return null;
 
@@ -38,13 +39,14 @@ router.get('/', async (req, res) => {
              COALESCE(json_agg(DISTINCT ap.*) FILTER (WHERE ap.id IS NOT NULL), '[]') AS approvals,
              row_to_json(l.*) AS lifecycle
       FROM recruitment_roles r
-      LEFT JOIN panelists       p  ON p.role_id  = r.id
+      LEFT JOIN panelists         p  ON p.role_id  = r.id
       LEFT JOIN sourcing_channels sc ON sc.role_id = r.id
-      LEFT JOIN approvals        ap ON ap.role_id  = r.id
-      LEFT JOIN lifecycle        l  ON l.role_id   = r.id
+      LEFT JOIN approvals         ap ON ap.role_id  = r.id
+      LEFT JOIN lifecycle         l  ON l.role_id   = r.id
+      WHERE r.client_id = $1
       GROUP BY r.id, l.id
       ORDER BY r.id
-    `);
+    `, [req.clientId]);
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -56,7 +58,7 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   const client = await pool.connect();
   try {
-    const role = await fetchRole(client, parseInt(req.params.id));
+    const role = await fetchRole(client, parseInt(req.params.id), req.clientId);
     if (!role) return res.status(404).json({ error: 'Role not found' });
     res.json(role);
   } catch (err) {
@@ -67,8 +69,8 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// ── POST /api/roles ─────── admin + recruiter ─────────────────
-router.post('/', authorize('admin','recruiter'), async (req, res) => {
+// ── POST /api/roles ──────── workspace admin only ─────────────
+router.post('/', requireClientAdmin, async (req, res) => {
   const {
     title, experience, headcount, ctc_budget, difficulty,
     avg_ttf_days, jd_link, questionnaire_link, assessment_link,
@@ -84,21 +86,21 @@ router.post('/', authorize('admin','recruiter'), async (req, res) => {
     const { rows } = await client.query(`
       INSERT INTO recruitment_roles
         (title, experience, headcount, ctc_budget, difficulty, avg_ttf_days,
-         jd_link, questionnaire_link, assessment_link, feedback_form_link, recruiter_pitch)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         jd_link, questionnaire_link, assessment_link, feedback_form_link, recruiter_pitch, client_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
       RETURNING *
     `, [
       title, experience || '', headcount || 1, ctc_budget || 5,
       difficulty || 'yellow', avg_ttf_days || null,
       jd_link || '', questionnaire_link || '', assessment_link || '',
-      feedback_form_link || '', recruiter_pitch || ''
+      feedback_form_link || '', recruiter_pitch || '', req.clientId
     ]);
 
     const roleId = rows[0].id;
     await client.query('INSERT INTO lifecycle (role_id) VALUES ($1)', [roleId]);
     await client.query('COMMIT');
 
-    const full = await fetchRole(client, roleId);
+    const full = await fetchRole(client, roleId, req.clientId);
     res.status(201).json(full);
   } catch (err) {
     await client.query('ROLLBACK');
@@ -109,8 +111,8 @@ router.post('/', authorize('admin','recruiter'), async (req, res) => {
   }
 });
 
-// ── PATCH /api/roles/:id ─── admin + recruiter ────────────────
-router.patch('/:id', authorize('admin','recruiter'), async (req, res) => {
+// ── PATCH /api/roles/:id ─── workspace admin only ────────────
+router.patch('/:id', requireClientAdmin, async (req, res) => {
   const id = parseInt(req.params.id);
   const fields = [
     'title','experience','headcount','ctc_budget','filled','in_progress',
@@ -134,12 +136,13 @@ router.patch('/:id', authorize('admin','recruiter'), async (req, res) => {
   values.push(id);
   const client = await pool.connect();
   try {
+    values.push(req.clientId);
     const { rows } = await client.query(
-      `UPDATE recruitment_roles SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`,
+      `UPDATE recruitment_roles SET ${updates.join(', ')} WHERE id = $${idx} AND client_id = $${idx + 1} RETURNING *`,
       values
     );
     if (!rows[0]) return res.status(404).json({ error: 'Role not found' });
-    const full = await fetchRole(client, id);
+    const full = await fetchRole(client, id, req.clientId);
     res.json(full);
   } catch (err) {
     console.error(err);
@@ -149,11 +152,12 @@ router.patch('/:id', authorize('admin','recruiter'), async (req, res) => {
   }
 });
 
-// ── DELETE /api/roles/:id ─── admin only ──────────────────────
-router.delete('/:id', authorize('admin'), async (req, res) => {
+// ── DELETE /api/roles/:id ─── workspace admin only ────────────
+router.delete('/:id', requireClientAdmin, async (req, res) => {
   try {
     const { rowCount } = await pool.query(
-      'DELETE FROM recruitment_roles WHERE id = $1', [parseInt(req.params.id)]
+      'DELETE FROM recruitment_roles WHERE id = $1 AND client_id = $2',
+      [parseInt(req.params.id), req.clientId]
     );
     if (!rowCount) return res.status(404).json({ error: 'Role not found' });
     res.json({ message: 'Role deleted' });
@@ -162,8 +166,8 @@ router.delete('/:id', authorize('admin'), async (req, res) => {
   }
 });
 
-// ── PATCH /api/roles/:id/lifecycle ───────────────────────────
-router.patch('/:id/lifecycle', authorize('admin','recruiter'), async (req, res) => {
+// ── PATCH /api/roles/:id/lifecycle ───── workspace admin ─────
+router.patch('/:id/lifecycle', requireClientAdmin, async (req, res) => {
   const id = parseInt(req.params.id);
   const { sourcing, screening, interview, offered, joined } = req.body;
   try {
@@ -189,7 +193,7 @@ router.patch('/:id/lifecycle', authorize('admin','recruiter'), async (req, res) 
 // ══════════════════════════════════════════════════════════════
 
 // ── POST /api/roles/:id/panelists ────────────────────────────
-router.post('/:id/panelists', authorize('admin','recruiter'), async (req, res) => {
+router.post('/:id/panelists', requireClientAdmin, async (req, res) => {
   const { name, designation, email, phone } = req.body;
   if (!name) return res.status(400).json({ error: 'Name required' });
   try {
@@ -204,7 +208,7 @@ router.post('/:id/panelists', authorize('admin','recruiter'), async (req, res) =
 });
 
 // ── PATCH /api/roles/:id/panelists/:pid ──────────────────────
-router.patch('/:id/panelists/:pid', authorize('admin','recruiter'), async (req, res) => {
+router.patch('/:id/panelists/:pid', requireClientAdmin, async (req, res) => {
   const { name, designation, email, phone } = req.body;
   try {
     const { rows } = await pool.query(`
@@ -223,7 +227,7 @@ router.patch('/:id/panelists/:pid', authorize('admin','recruiter'), async (req, 
 });
 
 // ── DELETE /api/roles/:id/panelists/:pid ─────────────────────
-router.delete('/:id/panelists/:pid', authorize('admin','recruiter'), async (req, res) => {
+router.delete('/:id/panelists/:pid', requireClientAdmin, async (req, res) => {
   try {
     await pool.query('DELETE FROM panelists WHERE id = $1 AND role_id = $2',
       [parseInt(req.params.pid), parseInt(req.params.id)]);
@@ -237,7 +241,7 @@ router.delete('/:id/panelists/:pid', authorize('admin','recruiter'), async (req,
 //  SOURCING CHANNELS
 // ══════════════════════════════════════════════════════════════
 
-router.post('/:id/channels', authorize('admin','recruiter'), async (req, res) => {
+router.post('/:id/channels', requireClientAdmin, async (req, res) => {
   const { channel } = req.body;
   if (!channel) return res.status(400).json({ error: 'Channel name required' });
   try {
@@ -251,7 +255,7 @@ router.post('/:id/channels', authorize('admin','recruiter'), async (req, res) =>
   }
 });
 
-router.delete('/:id/channels/:cid', authorize('admin','recruiter'), async (req, res) => {
+router.delete('/:id/channels/:cid', requireClientAdmin, async (req, res) => {
   try {
     await pool.query('DELETE FROM sourcing_channels WHERE id = $1 AND role_id = $2',
       [parseInt(req.params.cid), parseInt(req.params.id)]);
@@ -265,7 +269,7 @@ router.delete('/:id/channels/:cid', authorize('admin','recruiter'), async (req, 
 //  APPROVALS
 // ══════════════════════════════════════════════════════════════
 
-router.post('/:id/approvals', authorize('admin','recruiter'), async (req, res) => {
+router.post('/:id/approvals', requireClientAdmin, async (req, res) => {
   const { label, status } = req.body;
   if (!label) return res.status(400).json({ error: 'Label required' });
   try {
@@ -280,7 +284,7 @@ router.post('/:id/approvals', authorize('admin','recruiter'), async (req, res) =
   }
 });
 
-router.patch('/:id/approvals/:aid', authorize('admin','recruiter'), async (req, res) => {
+router.patch('/:id/approvals/:aid', requireClientAdmin, async (req, res) => {
   const { status } = req.body;
   try {
     const { rows } = await pool.query(
@@ -294,7 +298,7 @@ router.patch('/:id/approvals/:aid', authorize('admin','recruiter'), async (req, 
   }
 });
 
-router.delete('/:id/approvals/:aid', authorize('admin','recruiter'), async (req, res) => {
+router.delete('/:id/approvals/:aid', requireClientAdmin, async (req, res) => {
   try {
     await pool.query('DELETE FROM approvals WHERE id = $1 AND role_id = $2',
       [parseInt(req.params.aid), parseInt(req.params.id)]);
