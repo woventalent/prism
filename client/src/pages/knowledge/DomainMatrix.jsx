@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getKnowledge, saveKnowledge } from '../../api/index';
-import { useAuth } from '../../context/AuthContext';
+import { useClient } from '../../context/ClientContext';
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
 
@@ -14,13 +14,26 @@ const btn = (color, bg, border) => ({
   color, background: bg || 'transparent',
 });
 
-// #16 — default text for SPOC contact columns
-const SPOC_COLS  = ['SPOC Contact', 'Woven SPOC Contact'];
-const SPOC_DEFAULT = 'Email: \nDial: ';
+// Columns that hold a person's name + role
+const PERSON_COLS    = ['Client SPOC', 'Woven SPOC'];
+const PERSON_DEFAULT = 'Name: \nDesignation/ Role: ';
+
+// Columns that hold contact details
+const CONTACT_COLS    = ['SPOC Contacts', 'Woven SPOC Contacts', 'SPOC Contact', 'Woven SPOC Contact'];
+const CONTACT_DEFAULT = 'Mobile: \nEmail: ';
+
+function colDefault(colName) {
+  if (PERSON_COLS.includes(colName))  return PERSON_DEFAULT;
+  if (CONTACT_COLS.includes(colName)) return CONTACT_DEFAULT;
+  return '';
+}
+
+// Back-compat: keep old SPOC_COLS reference for addSpocCol quick-add buttons
+const SPOC_COLS    = ['SPOC Contacts', 'Woven SPOC Contacts'];
+const SPOC_DEFAULT = CONTACT_DEFAULT;
 
 export default function DomainMatrix({ printRef }) {
-  const { user } = useAuth();
-  const canEdit = user?.role === 'admin' || user?.role === 'recruiter';
+  const { canEdit } = useClient() || {};
 
   const [data, setData]         = useState(null);
   const [loaded, setLoaded]     = useState(false);
@@ -30,7 +43,20 @@ export default function DomainMatrix({ printRef }) {
 
   useEffect(() => {
     getKnowledge('domain_matrix').then(d => {
-      if (d) setData(d);
+      if (d) {
+        // Fill empty cells with column-appropriate defaults
+        const patched = {
+          ...d,
+          rows: d.rows.map(r => {
+            const nr = { ...r };
+            d.columns.forEach(col => {
+              if (!nr[col]) nr[col] = colDefault(col);
+            });
+            return nr;
+          }),
+        };
+        setData(patched);
+      }
       setLoaded(true);
     });
   }, []);
@@ -74,10 +100,7 @@ export default function DomainMatrix({ printRef }) {
   function addRow() {
     setData(d => {
       const newRow = { id: uid() };
-      d.columns.forEach(c => {
-        // #16 — pre-fill SPOC columns with Email/Dial template
-        newRow[c] = SPOC_COLS.includes(c) ? SPOC_DEFAULT : '';
-      });
+      d.columns.forEach(c => { newRow[c] = colDefault(c); });
       return { ...d, rows: [...d.rows, newRow] };
     });
   }
@@ -88,10 +111,9 @@ export default function DomainMatrix({ printRef }) {
 
   function addColumn(name) {
     const colName = name || `Col ${Date.now().toString(36).slice(-4)}`;
-    const defaultVal = SPOC_COLS.includes(colName) ? SPOC_DEFAULT : '';
     setData(d => ({
       columns: [...d.columns, colName],
-      rows: d.rows.map(r => ({ ...r, [colName]: defaultVal })),
+      rows: d.rows.map(r => ({ ...r, [colName]: colDefault(colName) })),
     }));
   }
 
