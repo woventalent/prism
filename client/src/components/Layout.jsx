@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useClient } from '../context/ClientContext';
 
@@ -50,11 +50,6 @@ export default function Layout() {
           <div style={s.sub}>Talent Intelligence Platform</div>
         </div>
 
-        {/* Nav */}
-        <nav style={s.nav}>
-          <NavLink to={base || '/'} end style={({ isActive }) => s.navLink(isActive)}>Dashboard</NavLink>
-          <NavLink to={`${base}/knowledge`} style={({ isActive }) => s.navLink(isActive)}>Knowledge Base</NavLink>
-        </nav>
 
         {/* User chip */}
         <div style={s.userChip} ref={menuRef}>

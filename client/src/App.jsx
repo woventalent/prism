@@ -5,7 +5,6 @@ import { ClientProvider } from './context/ClientContext';
 import { getClients } from './api';
 import LoginPage              from './pages/LoginPage';
 import AuthCallbackPage       from './pages/AuthCallbackPage';
-import DashboardPage          from './pages/DashboardPage';
 import KnowledgePage          from './pages/KnowledgePage';
 import SettingsPage           from './pages/SettingsPage';
 import WorkspaceSelectorPage  from './pages/WorkspaceSelectorPage';
@@ -83,8 +82,7 @@ export default function App() {
           <Route path="/super-admin" element={<SuperAdminRoute><SuperAdminPage /></SuperAdminRoute>} />
 
           <Route path="/w/:clientSlug" element={<PrivateRoute><WorkspaceLayout /></PrivateRoute>}>
-            <Route index        element={<DashboardPage />} />
-            <Route path="knowledge" element={<KnowledgePage />} />
+            <Route index            element={<KnowledgePage />} />
             <Route path="settings"  element={<SettingsPage />} />
           </Route>
 
