@@ -1,4 +1,4 @@
-# Recruitment Command Centre — AEW&C Mk-II
+# Recruitment Command Centre
 
 > A full-stack, role-based recruitment lifecycle management platform for tracking headcount, interview panels, sourcing channels, approvals, and candidate pipeline stages.
 
