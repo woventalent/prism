@@ -16,7 +16,7 @@ const btn = (color, bg, border) => ({
 function slugify(s) { return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
 
 // ── Client Card ───────────────────────────────────────────────
-function ClientCard({ client, onManage, onDelete, onEnter }) {
+function ClientCard({ client, onEdit, onManage, onDelete, onEnter }) {
   return (
     <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'hidden' }}>
       <div style={{ background: C.blue, padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -29,13 +29,55 @@ function ClientCard({ client, onManage, onDelete, onEnter }) {
         </span>
       </div>
       <div style={{ padding: '14px 18px' }}>
-        {client.description && <p style={{ margin: '0 0 12px', fontSize: 12, color: C.muted }}>{client.description}</p>}
-        <div style={{ display: 'flex', gap: 8 }}>
+        {client.description
+          ? <p style={{ margin: '0 0 12px', fontSize: 12, color: C.muted }}>{client.description}</p>
+          : <p style={{ margin: '0 0 12px', fontSize: 12, color: '#CBD5E1', fontStyle: 'italic' }}>No description</p>
+        }
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button style={btn(C.blue, C.lightBlue, C.blue)} onClick={() => onManage(client)}>Manage Users</button>
-          <button style={btn(C.muted, '#fff', C.border)} onClick={() => onEnter(client)}>Enter Workspace →</button>
+          <button style={btn(C.muted, '#fff', C.border)} onClick={() => onEdit(client)}>Edit</button>
+          <button style={btn(C.muted, '#fff', C.border)} onClick={() => onEnter(client)}>Enter →</button>
           <button style={{ ...btn(C.red, '#FEF2F2', '#FCA5A5'), marginLeft: 'auto' }} onClick={() => onDelete(client)}>Delete</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Edit Client Modal ─────────────────────────────────────────
+function EditClientModal({ client, onSave, onClose }) {
+  const [form, setForm] = useState({ name: client.name, slug: client.slug, description: client.description || '' });
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    await onSave(client.id, form);
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <form onSubmit={handleSubmit} style={{ background: '#fff', borderRadius: 16, padding: 32, width: 480, boxShadow: '0 12px 48px rgba(0,0,0,0.2)' }}>
+        <h2 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 700, color: C.blue }}>Edit Workspace</h2>
+        {[
+          { label: 'Client / Company Name *', key: 'name', placeholder: 'Adani Defence & Aerospace' },
+          { label: 'URL Slug *', key: 'slug', placeholder: 'adani-da' },
+          { label: 'Description', key: 'description', placeholder: 'Brief description…' },
+        ].map(f => (
+          <div key={f.key} style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 5 }}>{f.label}</label>
+            <input
+              value={form[f.key]}
+              onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
+              placeholder={f.placeholder}
+              required={f.key !== 'description'}
+              style={{ width: '100%', padding: '9px 12px', border: `1px solid ${C.border}`, borderRadius: 7, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' }}
+            />
+          </div>
+        ))}
+        <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+          <button type="submit" style={{ flex: 1, padding: 10, background: C.blue, color: '#fff', border: 'none', borderRadius: 7, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Save Changes</button>
+          <button type="button" onClick={onClose} style={{ padding: '10px 18px', border: `1px solid ${C.border}`, borderRadius: 7, fontWeight: 600, cursor: 'pointer', background: '#fff' }}>Cancel</button>
+        </div>
+      </form>
     </div>
   );
 }
@@ -181,6 +223,7 @@ export default function SuperAdminPage() {
   const [clients,      setClients]      = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [managing,     setManaging]     = useState(null);
+  const [editing,      setEditing]      = useState(null);
   const [showCreate,   setShowCreate]   = useState(false);
   const [form,         setForm]         = useState({ name: '', slug: '', description: '' });
   const [toast,        setToast]        = useState(null);
@@ -202,6 +245,15 @@ export default function SuperAdminPage() {
       setShowCreate(false);
       setForm({ name: '', slug: '', description: '' });
       showToast('Workspace created');
+    } catch (err) { showToast(err.response?.data?.error || 'Error', 'error'); }
+  }
+
+  async function handleEdit(id, form) {
+    try {
+      const updated = await updateClient(id, form);
+      setClients(prev => prev.map(c => c.id === id ? { ...c, ...updated } : c));
+      setEditing(null);
+      showToast('Workspace updated');
     } catch (err) { showToast(err.response?.data?.error || 'Error', 'error'); }
   }
 
@@ -262,6 +314,7 @@ export default function SuperAdminPage() {
               <ClientCard
                 key={c.id}
                 client={c}
+                onEdit={setEditing}
                 onManage={setManaging}
                 onDelete={handleDelete}
                 onEnter={handleEnter}
@@ -302,6 +355,14 @@ export default function SuperAdminPage() {
             </div>
           </form>
         </div>
+      )}
+
+      {editing && (
+        <EditClientModal
+          client={editing}
+          onSave={handleEdit}
+          onClose={() => setEditing(null)}
+        />
       )}
 
       {managing && (
