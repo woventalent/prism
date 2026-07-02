@@ -1,11 +1,14 @@
-# Recruitment Command Centre
+# Prism — Talent Intelligence Platform
 
-> A full-stack, role-based recruitment lifecycle management platform for tracking headcount, interview panels, sourcing channels, approvals, and candidate pipeline stages.
+> A multi-tenant, client-scoped talent intelligence platform for Woven Talent. Each client organisation gets an isolated workspace containing their knowledge base, SPOC contacts, domain matrix, and BU planning data.
 
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green)](https://nodejs.org)
 [![React](https://img.shields.io/badge/React-18-blue)](https://react.dev)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue)](https://postgresql.org)
-[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+[![Auth](https://img.shields.io/badge/Auth-Microsoft%20SSO-blue)](https://learn.microsoft.com/en-us/azure/active-directory/)
+
+**Production URL:** https://prism.woventalent.in  
+**GitHub:** https://github.com/woventalent/prism
 
 ---
 
@@ -14,145 +17,209 @@
 1. [Tech Stack](#tech-stack)
 2. [Project Structure](#project-structure)
 3. [Features](#features)
-4. [User Roles](#user-roles)
-5. [Prerequisites](#prerequisites)
+4. [Multi-Tenancy & User Roles](#multi-tenancy--user-roles)
+5. [Authentication — Microsoft SSO](#authentication--microsoft-sso)
 6. [Environment Variables](#environment-variables)
 7. [Local Development Setup](#local-development-setup)
-8. [Production Deployment — Ubuntu VPS (No Docker)](#production-deployment--ubuntu-vps-no-docker)
-9. [Production Deployment — Docker Compose](#production-deployment--docker-compose)
-10. [Nginx + SSL Configuration](#nginx--ssl-configuration)
-11. [Database Management](#database-management)
-12. [API Reference](#api-reference)
-13. [Default Credentials](#default-credentials)
-14. [Troubleshooting](#troubleshooting)
+8. [Production Deployment](#production-deployment)
+9. [Database Schema & Migrations](#database-schema--migrations)
+10. [API Reference](#api-reference)
+11. [First-Time Production Setup](#first-time-production-setup)
+12. [Updating in Production](#updating-in-production)
+13. [Troubleshooting](#troubleshooting)
 
 ---
 
 ## Tech Stack
 
-| Layer      | Technology                              |
-|------------|-----------------------------------------|
-| Frontend   | React 18, Vite, React Router v6         |
-| Backend    | Node.js 20, Express 4                   |
-| Database   | PostgreSQL 16                           |
-| Auth       | JWT (role-based: Admin / Recruiter / Viewer) |
-| Process Mgr| PM2                                     |
-| Web Server | Nginx (reverse proxy + SSL termination) |
-| Containerisation | Docker + Docker Compose           |
+| Layer           | Technology                                          |
+|-----------------|-----------------------------------------------------|
+| Frontend        | React 18, Vite, React Router v6                     |
+| Backend         | Node.js 20, Express 4                               |
+| Database        | PostgreSQL 16                                       |
+| Authentication  | Microsoft Entra ID (Azure AD) SSO via MSAL Node     |
+| Session tokens  | JWT (jsonwebtoken) — issued after SSO validation    |
+| Process Manager | PM2 (cluster mode)                                  |
+| Reverse Proxy   | Caddy (auto HTTPS via Let's Encrypt)                |
 
 ---
 
 ## Project Structure
 
 ```
-recruitment-command-centre/
-├── server/                        # Express API
-│   ├── index.js                   # Entry point
-│   ├── db.js                      # PostgreSQL pool
-│   ├── .env.example               # Environment variable template
+prism/
+├── server/                         # Express API (port 4000)
+│   ├── index.js                    # Entry point, route registration
+│   ├── db.js                       # PostgreSQL connection pool
+│   ├── .env                        # Environment variables (not committed)
 │   ├── db/
-│   │   ├── schema.sql             # Full database schema
-│   │   └── seed.js                # Seeds schema + default data
+│   │   ├── schema.sql              # Full database schema
+│   │   ├── seed.js                 # Initial data seed
+│   │   ├── seed-knowledge.js       # Knowledge base seed data
+│   │   └── migrate-multi-tenant.js # One-time migration: adds clients + client_users
 │   ├── middleware/
-│   │   └── auth.js                # JWT verify + role guard
+│   │   └── auth.js                 # JWT verify, requireClientAccess, requireSuperAdmin
 │   └── routes/
-│       ├── auth.js                # Login, /me, change-password
-│       ├── roles.js               # Full CRUD for recruitment roles
-│       └── users.js               # User management (admin only)
+│       ├── auth.js                 # Microsoft SSO + /me
+│       ├── clients.js              # Workspace CRUD + user management
+│       ├── knowledge.js            # Knowledge base (client-scoped)
+│       └── users.js                # Platform-level user management
 │
-├── client/                        # React + Vite frontend
-│   ├── index.html
-│   ├── vite.config.js             # Vite config with API proxy
-│   ├── nginx.conf                 # Nginx config for Docker builds
-│   └── src/
-│       ├── App.jsx                # Routes + auth guards
-│       ├── index.css              # Global styles
-│       ├── api/index.js           # Axios client + interceptors
-│       ├── context/AuthContext.jsx
-│       ├── pages/
-│       │   ├── LoginPage.jsx
-│       │   ├── DashboardPage.jsx
-│       │   └── UsersPage.jsx
-│       └── components/
-│           ├── Layout.jsx         # Top nav + shell
-│           ├── StatsBar.jsx       # Summary stats
-│           ├── RolesTable.jsx     # Main dashboard table
-│           ├── RoleDrawer.jsx     # Full role detail side panel
-│           ├── AddRoleModal.jsx   # Create new role
-│           └── Toast.jsx          # Notifications
-│
-├── docker-compose.yml             # Full stack via Docker
-└── README.md
+└── client/                         # React + Vite frontend
+    ├── vite.config.js              # Dev proxy: /api → localhost:4000
+    └── src/
+        ├── App.jsx                 # Routes + auth guards + WorkspaceLayout
+        ├── api/index.js            # Axios client (attaches JWT + X-Client-ID)
+        ├── context/
+        │   ├── AuthContext.jsx     # User, clients list, isSuperAdmin
+        │   └── ClientContext.jsx   # Active workspace, canEdit
+        └── pages/
+            ├── LoginPage.jsx           # Microsoft SSO sign-in button
+            ├── AuthCallbackPage.jsx    # Handles /auth/callback after SSO
+            ├── WorkspaceSelectorPage.jsx
+            ├── SuperAdminPage.jsx      # Workspace + user management
+            ├── SettingsPage.jsx        # Workspace member management
+            └── knowledge/
+                ├── KnowledgePage.jsx       # Tab shell
+                ├── CompanyProfile.jsx
+                ├── CapabilityReport.jsx
+                ├── DomainMatrix.jsx
+                └── BUPlanning.jsx
 ```
 
 ---
 
 ## Features
 
-### Dashboard
-- Stats bar — Total HC, Filled, Remaining, CTC Budget, Hard-to-Fill count, Avg TTF
-- Filterable / searchable roles table
-- Difficulty colour coding: 🟢 Easy · 🟡 Moderate · 🔴 Hard
+### Knowledge Base (per workspace)
+Each client workspace has four knowledge modules, accessible at `/w/:clientSlug/prism`:
 
-### Role Detail Drawer
-Each role has a slide-in panel with:
-- **Lifecycle Tracker** — Sourcing → Screening → Interview → Offered → Joined (click to update counts)
-- **Core Fields** — Title, Experience, HC, CTC Budget, Filled, In-Progress, Difficulty, TTF (all editable)
-- **Recruitment Kit** — JD link, Questionnaire link, Assessment Form link, Interviewer Feedback Form link
-- **Recruiter Pitch** — Free-text selling points for recruiters
-- **Interview Panel** — Add/remove panelists with name, designation, email, phone
-- **Sourcing Channels** — Tag-based (LinkedIn, Naukri, Campus, etc.) — add/remove
-- **Approvals** — Add steps, toggle Pending/Approved, remove
+#### Company Profile
+- Rich-text sections and subsections with inline editing
+- Admins can reorder sections/subsections (▲▼), add/remove them
+- 2-second debounced autosave
 
-### User Management (Admin only)
-- Create / edit / delete team members
-- Assign roles: Admin, Recruiter, Viewer
+#### Capability Report
+- Structured capability data per domain
+- Section-based layout, editable by workspace admins
+
+#### Domain Matrix
+- Business domain landscape table with configurable columns
+- Smart column defaults:
+  - **Client SPOC / Woven SPOC** → pre-fills `Name: \nDesignation/ Role:`
+  - **SPOC Contacts / Woven SPOC Contacts** → pre-fills `Mobile: \nEmail:`
+- Add/remove rows and columns; rename column headers inline
+- `white-space: pre-wrap` rendering preserves multi-line contact details
+
+#### BU Planning
+- 5-year workforce planning per Business Unit
+- Per-BU: leader, domains, planning dimensions × year grid
+- Add/remove BUs, dimensions, and year columns
+- Y1–Y5 columns are center-aligned
+
+### Download
+- **Download Section** — exports the active tab as a PDF
+- **Download All** — exports all four sections as a combined PDF
+
+### Super Admin Panel (`/super-admin`)
+- Create, edit, and delete client workspaces
+- Manage users across all workspaces
+- Enter any workspace as admin
 
 ---
 
-## User Roles
+## Multi-Tenancy & User Roles
 
-| Role      | Can View | Can Edit Roles | Can Delete Roles | Can Manage Users |
-|-----------|----------|---------------|-----------------|-----------------|
-| Admin     | ✅        | ✅             | ✅               | ✅               |
-| Recruiter | ✅        | ✅             | ❌               | ❌               |
-| Viewer    | ✅        | ❌             | ❌               | ❌               |
+Prism uses a three-tier role model:
+
+| Role               | Scope    | Capabilities                                                 |
+|--------------------|----------|--------------------------------------------------------------|
+| **Super Admin**    | Platform | Create/edit/delete workspaces, manage all users, enter any workspace |
+| **Workspace Admin**| Client   | View + edit all knowledge base content, manage workspace members |
+| **Workspace Member**| Client  | View-only access to the workspace knowledge base             |
+
+### How it works
+- Every API request includes an `X-Client-ID` header (set automatically from `localStorage`)
+- Server middleware scopes all knowledge base reads/writes to `req.clientId`
+- Users can belong to multiple workspaces with different roles in each
+- Super Admins bypass workspace access checks and can enter any workspace
+
+### URL structure
+```
+/workspaces              → workspace selector (after login)
+/super-admin             → super admin panel
+/w/:clientSlug/prism     → workspace knowledge base
+/w/:clientSlug/settings  → workspace settings (member management)
+```
 
 ---
 
-## Prerequisites
+## Authentication — Microsoft SSO
 
-### Local Development
-- **Node.js** v18 or higher → [nodejs.org](https://nodejs.org)
-- **npm** v9 or higher (comes with Node.js)
-- **PostgreSQL** v14+ running locally, OR Docker Desktop
+Prism uses **Microsoft Entra ID (Azure AD)** for authentication. Username/password login is not supported.
 
-### Production Server
-- Ubuntu 22.04 / 24.04 LTS (or any Debian-based OS)
-- Minimum: 1 vCPU, 1 GB RAM
-- Ports 22 (SSH), 80 (HTTP), 443 (HTTPS) open in firewall
-- A domain pointing to your server's IP
+### How the SSO flow works
+
+```
+1. User clicks "Sign in with Microsoft"
+2. Browser navigates to GET /api/auth/microsoft
+3. Server generates an auth URL and redirects to Microsoft
+4. User authenticates with their @woventalent.in account
+5. Microsoft redirects to GET /api/auth/microsoft/callback?code=...
+6. Server validates:
+   - Tenant ID must match AZURE_TENANT_ID
+   - Email domain must be @woventalent.in
+7. Server finds or creates the user in the DB (matched by email)
+8. Server issues a Prism JWT, redirects to /auth/callback?payload=<base64>
+9. Frontend stores the JWT, navigates to workspace selector or workspace
+```
+
+### Azure AD App Registration requirements
+
+In Azure Portal → App registrations → your app:
+
+1. **Redirect URI** (Web): `https://prism.woventalent.in/api/auth/microsoft/callback`
+2. **Client Secret**: create one, note the value and secret ID
+3. **API Permissions**: `openid`, `profile`, `email` (Microsoft Graph — delegated)
+
+For local development, also add: `http://localhost:4000/api/auth/microsoft/callback`
 
 ---
 
 ## Environment Variables
 
-Copy `server/.env.example` to `server/.env` and fill in the values:
+Create `server/.env` with the following:
 
-```bash
-cp server/.env.example server/.env
+```env
+# Server
+PORT=4000
+DATABASE_URL=postgresql://rcc_user:YOUR_DB_PASSWORD@localhost:5432/rcc_db
+JWT_SECRET=your_long_random_secret_here
+JWT_EXPIRES_IN=7d
+CLIENT_ORIGIN=https://prism.woventalent.in
+
+# Microsoft Entra ID SSO
+AZURE_CLIENT_ID=your_azure_app_client_id
+AZURE_CLIENT_SECRET=your_azure_client_secret_value
+AZURE_TENANT_ID=your_azure_tenant_id
+AZURE_REDIRECT_URI=https://prism.woventalent.in/api/auth/microsoft/callback
+AZURE_ALLOWED_DOMAIN=woventalent.in
 ```
 
-| Variable        | Description                                       | Example                              |
-|-----------------|---------------------------------------------------|--------------------------------------|
-| `PORT`          | Port the Express API listens on                  | `4000`                               |
-| `DATABASE_URL`  | Full PostgreSQL connection string                 | `postgresql://user:pass@host/db`     |
-| `DB_SSL`        | Set to `true` for managed/cloud databases        | `false`                              |
-| `JWT_SECRET`    | Long random string for signing JWTs              | `change_me_to_something_very_long`   |
-| `JWT_EXPIRES_IN`| JWT token lifetime                               | `7d`                                 |
-| `CLIENT_ORIGIN` | Frontend origin for CORS                         | `https://your-domain.com`            |
+| Variable              | Description                                         |
+|-----------------------|-----------------------------------------------------|
+| `PORT`                | Express API port                                    |
+| `DATABASE_URL`        | Full PostgreSQL connection string                   |
+| `JWT_SECRET`          | Long random string for signing JWTs                 |
+| `JWT_EXPIRES_IN`      | Token lifetime (e.g. `7d`)                          |
+| `CLIENT_ORIGIN`       | Frontend origin for CORS + SSO redirect target      |
+| `AZURE_CLIENT_ID`     | Azure AD app (client) ID                            |
+| `AZURE_CLIENT_SECRET` | Azure AD client secret value                        |
+| `AZURE_TENANT_ID`     | Azure AD tenant ID                                  |
+| `AZURE_REDIRECT_URI`  | Must exactly match the redirect URI in Azure Portal |
+| `AZURE_ALLOWED_DOMAIN`| Only this email domain is permitted to sign in      |
 
-> ⚠️ **Never commit `server/.env` to version control.** Only `.env.example` is committed.
+> ⚠️ Never commit `server/.env` to version control.
 
 Generate a secure JWT secret:
 ```bash
@@ -163,18 +230,20 @@ node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 
 ## Local Development Setup
 
-### Option A — PostgreSQL via Docker (recommended)
+### Prerequisites
+- Node.js 20+
+- PostgreSQL 16 running locally (or via Docker)
 
-**Step 1 — Clone the repo**
+### Step 1 — Clone the repo
 ```bash
-git clone https://github.com/noblemavely/recruitment-command-centre.git
-cd recruitment-command-centre
+git clone https://github.com/woventalent/prism.git
+cd prism
 ```
 
-**Step 2 — Start PostgreSQL**
+### Step 2 — Start PostgreSQL (via Docker)
 ```bash
 docker run -d \
-  --name rcc_postgres \
+  --name prism_postgres \
   -e POSTGRES_DB=rcc_db \
   -e POSTGRES_USER=rcc_user \
   -e POSTGRES_PASSWORD=rcc_pass \
@@ -182,366 +251,198 @@ docker run -d \
   postgres:16-alpine
 ```
 
-**Step 3 — Configure environment**
-```bash
-cp server/.env.example server/.env
-# .env is already pre-configured for the docker postgres above — no changes needed
+### Step 3 — Create `server/.env`
+
+```env
+PORT=4000
+DATABASE_URL=postgresql://rcc_user:rcc_pass@localhost:5432/rcc_db
+JWT_SECRET=dev_secret_change_in_production
+JWT_EXPIRES_IN=7d
+CLIENT_ORIGIN=http://localhost:5173
+
+AZURE_CLIENT_ID=your_azure_app_client_id
+AZURE_CLIENT_SECRET=your_azure_client_secret
+AZURE_TENANT_ID=your_azure_tenant_id
+AZURE_REDIRECT_URI=http://localhost:4000/api/auth/microsoft/callback
+AZURE_ALLOWED_DOMAIN=woventalent.in
 ```
 
-**Step 4 — Install dependencies**
+### Step 4 — Install dependencies
 ```bash
 cd server && npm install
 cd ../client && npm install
 ```
 
-**Step 5 — Run the schema + seed data**
+### Step 5 — Initialise the database
 ```bash
 cd server && npm run seed
+node db/migrate-multi-tenant.js   # adds multi-tenant tables
 ```
-This creates all tables and inserts 11 default AEW&C Mk-II roles, an admin user, and a recruiter user.
 
-**Step 6 — Start the servers** (two terminals)
+### Step 6 — Start the servers (two terminals)
 ```bash
-# Terminal 1 — API (port 4000)
+# Terminal 1 — API
 cd server && npm run dev
 
-# Terminal 2 — Frontend (port 5173)
+# Terminal 2 — Frontend
 cd client && npm run dev
 ```
 
 Open → **http://localhost:5173**
 
----
-
-### Option B — PostgreSQL installed locally (Homebrew / apt)
-
-```bash
-# macOS
-brew install postgresql@16
-brew services start postgresql@16
-psql postgres -c "CREATE USER rcc_user WITH PASSWORD 'rcc_pass';"
-psql postgres -c "CREATE DATABASE rcc_db OWNER rcc_user;"
-
-# Ubuntu / Debian
-sudo apt install postgresql -y
-sudo -u postgres psql -c "CREATE USER rcc_user WITH PASSWORD 'rcc_pass';"
-sudo -u postgres psql -c "CREATE DATABASE rcc_db OWNER rcc_user;"
-```
-
-Then follow Steps 3–6 from Option A above.
+> **Note:** SSO will redirect back to `http://localhost:4000/api/auth/microsoft/callback`. Make sure this URI is registered in Azure Portal for local testing.
 
 ---
 
-## Production Deployment — Ubuntu VPS (No Docker)
+## Production Deployment
 
-This is the recommended approach for a DigitalOcean Droplet, Hetzner VPS, AWS EC2, etc.
+The production server runs on a VPS (DigitalOcean / Hetzner) with:
+- **PM2** managing the Node.js API process
+- **Caddy** (running in Docker) as the reverse proxy with automatic HTTPS
 
-### Step 1 — SSH into your server
+### Deploy steps
 
 ```bash
 ssh root@YOUR_SERVER_IP
-```
 
-### Step 2 — Install Node.js 20
-
-```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
-node -v   # should print v20.x.x
-```
-
-### Step 3 — Install PostgreSQL
-
-```bash
-sudo apt update && sudo apt install -y postgresql postgresql-contrib
-sudo systemctl enable postgresql
-sudo systemctl start postgresql
-```
-
-Create the database and user:
-```bash
-sudo -u postgres psql <<EOF
-CREATE USER rcc_user WITH PASSWORD 'your_strong_db_password';
-CREATE DATABASE rcc_db OWNER rcc_user;
-GRANT ALL PRIVILEGES ON DATABASE rcc_db TO rcc_user;
-EOF
-```
-
-### Step 4 — Install Nginx
-
-```bash
-sudo apt install -y nginx
-sudo systemctl enable nginx
-sudo systemctl start nginx
-```
-
-### Step 5 — Install PM2 (process manager)
-
-```bash
-sudo npm install -g pm2
-```
-
-### Step 6 — Clone and configure the app
-
-```bash
-cd /var/www
-sudo git clone https://github.com/noblemavely/recruitment-command-centre.git rcc
-sudo chown -R $USER:$USER /var/www/rcc
 cd /var/www/rcc
+
+# Pull latest code
+git pull origin master
+
+# Install any new server dependencies
+cd server && npm install
+
+# Rebuild frontend
+cd ../client && npm run build
+
+# Restart API with updated env vars
+pm2 restart rcc-api --update-env
 ```
 
-**Install dependencies:**
-```bash
-cd server && npm install --production
-cd ../client && npm install
-```
+### Caddy configuration
 
-**Create the production .env:**
-```bash
-cat > /var/www/rcc/server/.env <<EOF
-PORT=4000
-DATABASE_URL=postgresql://rcc_user:your_strong_db_password@localhost:5432/rcc_db
-JWT_SECRET=$(node -e "console.log(require('crypto').randomBytes(64).toString('hex'))")
-JWT_EXPIRES_IN=7d
-CLIENT_ORIGIN=https://your-domain.com
-EOF
-```
+Caddy runs inside a Docker container. The `Caddyfile` (at `/opt/plane-deploy/plane-app/Caddyfile`) contains:
 
-### Step 7 — Seed the database
-
-```bash
-cd /var/www/rcc/server && npm run seed
-```
-
-### Step 8 — Build the React frontend
-
-```bash
-cd /var/www/rcc/client && npm run build
-# Output is in /var/www/rcc/client/dist
-```
-
-### Step 9 — Start the API with PM2
-
-```bash
-cd /var/www/rcc/server
-pm2 start index.js --name rcc-api
-pm2 save
-pm2 startup   # follow the printed command to auto-start on reboot
-```
-
-Useful PM2 commands:
-```bash
-pm2 status          # see running processes
-pm2 logs rcc-api    # tail logs
-pm2 restart rcc-api # restart
-pm2 stop rcc-api    # stop
-```
-
-### Step 10 — Configure Nginx
-
-```bash
-sudo nano /etc/nginx/sites-available/rcc
-```
-
-Paste the following (replace `your-domain.com`):
-
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-
-    # Serve React build
-    root /var/www/rcc/client/dist;
-    index index.html;
-
-    # SPA fallback
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    # Proxy API to Express
-    location /api/ {
-        proxy_pass http://127.0.0.1:4000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_cache_bypass $http_upgrade;
-    }
+```caddy
+prism.woventalent.in {
+    reverse_proxy 172.18.0.1:4000
 }
 ```
 
-Enable and reload:
+After editing the Caddyfile:
 ```bash
-sudo ln -s /etc/nginx/sites-available/rcc /etc/nginx/sites-enabled/
-sudo nginx -t          # test config
-sudo systemctl reload nginx
+docker restart plane-app-proxy-1
+```
+
+### PM2 ecosystem file
+
+Located at `/var/www/rcc/ecosystem.config.js`. Key env vars:
+
+```js
+CLIENT_ORIGIN: 'https://prism.woventalent.in'
+```
+
+### PM2 commands
+```bash
+pm2 status                    # view all processes
+pm2 logs rcc-api              # tail API logs
+pm2 restart rcc-api           # restart
+pm2 restart rcc-api --update-env  # restart + pick up .env changes
 ```
 
 ---
 
-## Nginx + SSL Configuration
+## Database Schema & Migrations
 
-Install Certbot and get a free SSL certificate from Let's Encrypt:
+### Tables
 
-```bash
-sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d your-domain.com
-```
+| Table           | Purpose                                                   |
+|-----------------|-----------------------------------------------------------|
+| `users`         | Platform users (name, email, role, is_super_admin)        |
+| `clients`       | Client workspaces (name, slug, description)               |
+| `client_users`  | Workspace memberships (client_id, user_id, role)          |
+| `knowledge_base`| JSONB knowledge data, scoped by (client_id, section)      |
 
-Certbot will automatically update your Nginx config to handle HTTPS and set up auto-renewal. Verify renewal works:
-```bash
-sudo certbot renew --dry-run
-```
+### Running migrations
 
-Your app will now be live at `https://your-domain.com`.
-
----
-
-## Production Deployment — Docker Compose
-
-If your server has Docker installed, this is the fastest path.
-
-### Step 1 — Install Docker
-
-```bash
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER
-```
-
-### Step 2 — Clone the repo
-
-```bash
-git clone https://github.com/noblemavely/recruitment-command-centre.git
-cd recruitment-command-centre
-```
-
-### Step 3 — Update secrets in docker-compose.yml
-
-Open `docker-compose.yml` and replace:
-- `JWT_SECRET` → a long random string
-- `POSTGRES_PASSWORD` → a strong password
-- `CLIENT_ORIGIN` → your domain
-
-### Step 4 — Launch
-
-```bash
-docker-compose up -d --build
-```
-
-This starts three containers:
-- `rcc_postgres` — PostgreSQL database
-- `rcc_server` — Express API (auto-seeds on first boot)
-- `rcc_client` — React app served by Nginx
-
-Check they're running:
-```bash
-docker-compose ps
-docker-compose logs -f server   # watch API logs
-```
-
-### Updating the app (Docker)
-
-```bash
-git pull
-docker-compose up -d --build
-```
-
----
-
-## Database Management
-
-### Run schema only (no seed data)
-
-```bash
-cd server
-psql $DATABASE_URL -f db/schema.sql
-```
-
-### Re-seed (resets all roles to defaults)
-
+**Initial schema:**
 ```bash
 cd server && npm run seed
 ```
 
-> Note: seed is idempotent — it skips users and roles that already exist.
-
-### Manual backup
-
+**Multi-tenant migration** (run once — idempotent):
 ```bash
+node server/db/migrate-multi-tenant.js
+```
+
+This migration:
+1. Creates `clients` and `client_users` tables
+2. Adds `is_super_admin` to `users`
+3. Adds `client_id` to `knowledge_base`
+4. Migrates existing data to a default "Adani Defence & Aerospace" workspace
+5. Promotes the first admin user to Super Admin
+
+### Backup & restore
+```bash
+# Backup
 pg_dump $DATABASE_URL > backup_$(date +%Y%m%d).sql
-```
 
-### Restore from backup
-
-```bash
+# Restore
 psql $DATABASE_URL < backup_20240101.sql
-```
 
-### Connect to database directly
-
-```bash
-psql postgresql://rcc_user:rcc_pass@localhost:5432/rcc_db
+# Connect directly
+psql postgresql://rcc_user:PASSWORD@localhost:5432/rcc_db
 ```
 
 ---
 
 ## API Reference
 
-All routes except `/api/auth/login` require a `Bearer <token>` header.
+All routes except `/api/auth/microsoft` and `/api/auth/microsoft/callback` require:
+- `Authorization: Bearer <jwt>` header
+- `X-Client-ID: <clientId>` header for workspace-scoped routes
 
 ### Auth
 
-| Method | Endpoint                    | Auth     | Description               |
-|--------|-----------------------------|----------|---------------------------|
-| POST   | `/api/auth/login`           | None     | Login, returns JWT token  |
-| GET    | `/api/auth/me`              | Any      | Get current user info     |
-| POST   | `/api/auth/change-password` | Any      | Change own password       |
+| Method | Endpoint                          | Auth  | Description                              |
+|--------|-----------------------------------|-------|------------------------------------------|
+| GET    | `/api/auth/microsoft`             | None  | Initiates Microsoft OAuth redirect       |
+| GET    | `/api/auth/microsoft/callback`    | None  | OAuth callback — issues JWT, redirects to frontend |
+| GET    | `/api/auth/me`                    | JWT   | Returns current user + their workspaces  |
 
-### Roles
+### Clients (Workspaces)
 
-| Method | Endpoint                        | Auth              | Description                  |
-|--------|---------------------------------|-------------------|------------------------------|
-| GET    | `/api/roles`                    | Any               | List all roles with details  |
-| POST   | `/api/roles`                    | Admin / Recruiter | Create a new role            |
-| GET    | `/api/roles/:id`                | Any               | Get single role              |
-| PATCH  | `/api/roles/:id`                | Admin / Recruiter | Update role fields           |
-| DELETE | `/api/roles/:id`                | Admin only        | Delete a role                |
-| PATCH  | `/api/roles/:id/lifecycle`      | Admin / Recruiter | Update lifecycle stage counts|
+| Method | Endpoint                      | Auth              | Description                              |
+|--------|-------------------------------|-------------------|------------------------------------------|
+| GET    | `/api/clients`                | JWT               | Super Admin: all clients. Others: own workspaces |
+| POST   | `/api/clients`                | Super Admin       | Create a workspace                       |
+| PUT    | `/api/clients/:id`            | Super Admin       | Update workspace name/slug/description   |
+| DELETE | `/api/clients/:id`            | Super Admin       | Delete workspace                         |
+| GET    | `/api/clients/:id/users`      | Admin / Super Admin | List workspace members                 |
+| POST   | `/api/clients/:id/users`      | Admin / Super Admin | Add user to workspace (creates if new) |
+| PATCH  | `/api/clients/:id/users/:uid` | Admin / Super Admin | Change workspace role                  |
+| DELETE | `/api/clients/:id/users/:uid` | Admin / Super Admin | Remove user from workspace             |
 
-### Panelists
+### Knowledge Base
 
-| Method | Endpoint                              | Auth              | Description          |
-|--------|---------------------------------------|-------------------|----------------------|
-| POST   | `/api/roles/:id/panelists`            | Admin / Recruiter | Add panelist         |
-| PATCH  | `/api/roles/:id/panelists/:pid`       | Admin / Recruiter | Edit panelist        |
-| DELETE | `/api/roles/:id/panelists/:pid`       | Admin / Recruiter | Remove panelist      |
+Requires `X-Client-ID` header. Reads/writes are scoped to the active workspace.
 
-### Sourcing Channels
+| Method | Endpoint               | Auth             | Description                  |
+|--------|------------------------|------------------|------------------------------|
+| GET    | `/api/knowledge/:section` | Member+       | Get section data             |
+| PUT    | `/api/knowledge/:section` | Workspace Admin | Save section data (upsert)  |
 
-| Method | Endpoint                          | Auth              | Description        |
-|--------|-----------------------------------|-------------------|--------------------|
-| POST   | `/api/roles/:id/channels`         | Admin / Recruiter | Add channel        |
-| DELETE | `/api/roles/:id/channels/:cid`    | Admin / Recruiter | Remove channel     |
+Sections: `company_profile`, `capability_report`, `domain_matrix`, `bu_planning`
 
-### Approvals
+### Users (Platform-level)
 
-| Method | Endpoint                           | Auth              | Description               |
-|--------|------------------------------------|-------------------|---------------------------|
-| POST   | `/api/roles/:id/approvals`         | Admin / Recruiter | Add approval step         |
-| PATCH  | `/api/roles/:id/approvals/:aid`    | Admin / Recruiter | Toggle pending/approved   |
-| DELETE | `/api/roles/:id/approvals/:aid`    | Admin / Recruiter | Remove approval step      |
-
-### Users (Admin only)
-
-| Method | Endpoint          | Auth       | Description         |
-|--------|-------------------|------------|---------------------|
-| GET    | `/api/users`      | Admin only | List all users      |
-| POST   | `/api/users`      | Admin only | Create user         |
-| PATCH  | `/api/users/:id`  | Admin only | Update user         |
-| DELETE | `/api/users/:id`  | Admin only | Delete user         |
+| Method | Endpoint          | Auth        | Description              |
+|--------|-------------------|-------------|--------------------------|
+| GET    | `/api/users`      | Super Admin | List all platform users  |
+| POST   | `/api/users`      | Super Admin | Create user              |
+| PATCH  | `/api/users/:id`  | Super Admin | Update user              |
+| DELETE | `/api/users/:id`  | Super Admin | Delete user              |
 
 ### Health Check
 
@@ -551,85 +452,117 @@ GET /api/health   →   { "status": "ok", "ts": "..." }
 
 ---
 
-## Default Credentials
+## First-Time Production Setup
 
-| Role      | Email                   | Password        |
-|-----------|-------------------------|-----------------|
-| Admin     | admin@aewc.org          | Admin@123       |
-| Recruiter | recruiter@aewc.org      | Recruiter@123   |
+After deploying for the first time:
 
-> ⚠️ **Change these immediately after first login in production.**
-
----
-
-## Troubleshooting
-
-### `npm run seed` fails — connection refused
-- Make sure PostgreSQL is running: `sudo systemctl status postgresql`
-- Check `DATABASE_URL` in `server/.env` is correct
-- Verify the DB and user exist: `psql -U rcc_user -d rcc_db -c "SELECT 1"`
-
-### API returns 401 on every request
-- Your JWT token may be expired (default 7 days)
-- Log out and log back in to get a fresh token
-
-### React app shows blank page after build
-- Make sure `npm run build` completed without errors
-- Check Nginx `root` points to `client/dist`, not `client/`
-- Verify the SPA fallback (`try_files $uri /index.html`) is in your Nginx config
-
-### Nginx returns 502 Bad Gateway
-- The Express API is not running: `pm2 status`
-- Start it: `pm2 start /var/www/rcc/server/index.js --name rcc-api`
-- Check API logs: `pm2 logs rcc-api`
-
-### Port 4000 already in use
+### 1. Run the migration
 ```bash
-lsof -i :4000          # find what's using it
-kill -9 <PID>          # kill the process
+ssh root@YOUR_SERVER_IP
+cd /var/www/rcc && node server/db/migrate-multi-tenant.js
 ```
 
-### SSL certificate renewal fails
+### 2. Promote a user to Super Admin
+
+The first user to sign in via SSO can be promoted via SQL:
+
 ```bash
-sudo certbot renew --dry-run    # test renewal
-sudo systemctl status certbot.timer   # check auto-renewal timer
+psql postgresql://rcc_user:PASSWORD@localhost:5432/rcc_db << 'SQL'
+-- Promote user to Super Admin
+UPDATE users SET is_super_admin = TRUE WHERE email = 'you@woventalent.in';
+
+-- Add to a workspace as Admin
+INSERT INTO client_users (client_id, user_id, role)
+SELECT c.id, u.id, 'admin'
+FROM clients c, users u
+WHERE c.slug = 'your-workspace-slug' AND u.email = 'you@woventalent.in'
+ON CONFLICT (client_id, user_id) DO UPDATE SET role = 'admin';
+SQL
 ```
 
-### Resetting everything (local dev)
-```bash
-# Drop and recreate DB
-psql postgres -c "DROP DATABASE rcc_db;"
-psql postgres -c "CREATE DATABASE rcc_db OWNER rcc_user;"
-# Re-seed
-cd server && npm run seed
-```
+### 3. Add more users
+Once logged in as Super Admin, use the **Super Admin panel** (`/super-admin`) to:
+- Create additional client workspaces
+- Edit workspace names and descriptions
+- Add users to workspaces via the "Manage Users" button
 
 ---
 
 ## Updating in Production
 
 ```bash
+ssh root@YOUR_SERVER_IP
 cd /var/www/rcc
 
-# Pull latest code
-git pull
+# Pull latest
+git pull origin master
 
-# Install any new dependencies
-cd server && npm install --production
-cd ../client && npm install
+# Install new server dependencies (if any)
+cd server && npm install
 
 # Rebuild frontend
-cd client && npm run build
+cd ../client && npm run build
 
-# Restart API
-pm2 restart rcc-api
+# Restart API (picks up new code + updated .env)
+pm2 restart rcc-api --update-env
+```
 
-# If schema changed, run seed (safe — idempotent)
-cd server && npm run seed
+If the database schema changed, also run:
+```bash
+node /var/www/rcc/server/db/migrate-multi-tenant.js
+```
+
+---
+
+## Troubleshooting
+
+### Microsoft SSO — "unauthorized_domain" error
+- The signed-in Microsoft account's email domain doesn't match `AZURE_ALLOWED_DOMAIN`
+- Only `@woventalent.in` accounts are permitted
+
+### Microsoft SSO — "unauthorized_tenant" error
+- The Microsoft account belongs to a different Azure AD tenant
+- Verify `AZURE_TENANT_ID` in `.env` matches your organisation's tenant
+
+### Microsoft SSO — "invalid_state" error
+- The OAuth state parameter expired (10-minute window)
+- Try signing in again — this is normal if the tab was left idle
+
+### SSO redirect URI mismatch
+- Azure Portal must have the exact URI: `https://prism.woventalent.in/api/auth/microsoft/callback`
+- For local dev: `http://localhost:4000/api/auth/microsoft/callback`
+
+### API returns 401 on every request
+- JWT may be expired (default: 7 days)
+- Sign out and sign back in via Microsoft SSO
+
+### Knowledge base not loading / saving
+- Check that `X-Client-ID` is being sent (inspect network tab — should be the client's UUID)
+- Verify the user is a member of the workspace: `SELECT * FROM client_users WHERE user_id = <id>;`
+
+### Caddy not picking up config changes
+- `sed -i` changes the inode; Docker bind mount still points to the old inode
+- Fix: `docker restart plane-app-proxy-1`
+
+### Blank page after frontend build
+- Ensure `npm run build` completed without errors
+- The Express server serves `client/dist` — PM2 restart not needed for frontend-only changes
+
+### PM2 process keeps restarting
+```bash
+pm2 logs rcc-api --lines 50   # check for startup errors
+# Common cause: missing or malformed server/.env
+```
+
+### Database backup
+```bash
+pg_dump postgresql://rcc_user:PASSWORD@localhost:5432/rcc_db > prism_backup_$(date +%Y%m%d).sql
 ```
 
 ---
 
 ## Repository
 
-**GitHub:** https://github.com/noblemavely/recruitment-command-centre
+**GitHub:** https://github.com/woventalent/prism  
+**Production:** https://prism.woventalent.in  
+**Maintained by:** Woven Talent Engineering
