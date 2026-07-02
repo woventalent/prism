@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getKnowledge, saveKnowledge } from '../../api/index';
-import { useAuth } from '../../context/AuthContext';
+import { useClient } from '../../context/ClientContext';
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
 
@@ -15,8 +15,7 @@ const btn = (color, bg, border) => ({
 });
 
 export default function BUPlanning({ printRef }) {
-  const { user } = useAuth();
-  const canEdit = user?.role === 'admin' || user?.role === 'recruiter';
+  const { canEdit } = useClient() || {};
 
   const [data, setData]         = useState(null);
   const [loaded, setLoaded]     = useState(false);
@@ -276,13 +275,13 @@ export default function BUPlanning({ printRef }) {
                         ) : dim}
                       </td>
                       {d.years.map((yr, yi) => (
-                        <td key={yi} style={{ padding: '8px 10px', fontSize: 12, color: C.text, verticalAlign: 'top' }}>
+                        <td key={yi} style={{ padding: '8px 10px', fontSize: 12, color: C.text, verticalAlign: 'top', textAlign: 'center' }}>
                           {isEdit ? (
                             <textarea
                               value={(d.data[dim] || {})[yr] || ''}
                               onChange={e => dSetCell(bu.id, dim, yr, e.target.value)}
                               rows={3}
-                              style={{ width: '100%', border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 7px', fontSize: 11, resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }}
+                              style={{ width: '100%', border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 7px', fontSize: 11, resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box', textAlign: 'center' }}
                             />
                           ) : (
                             <span style={{ color: (d.data[dim] || {})[yr] ? C.text : C.muted, fontStyle: (d.data[dim] || {})[yr] ? 'normal' : 'italic', lineHeight: 1.5, display: 'block', minHeight: 36, whiteSpace: 'pre-wrap' }}>
