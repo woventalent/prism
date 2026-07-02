@@ -82,7 +82,8 @@ export default function App() {
           <Route path="/super-admin" element={<SuperAdminRoute><SuperAdminPage /></SuperAdminRoute>} />
 
           <Route path="/w/:clientSlug" element={<PrivateRoute><WorkspaceLayout /></PrivateRoute>}>
-            <Route index            element={<KnowledgePage />} />
+            <Route index            element={<Navigate to="prism" replace />} />
+            <Route path="prism"     element={<KnowledgePage />} />
             <Route path="settings"  element={<SettingsPage />} />
           </Route>
 
