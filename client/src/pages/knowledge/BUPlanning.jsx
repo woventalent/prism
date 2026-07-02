@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getKnowledge, saveKnowledge } from '../../api/index';
 import { useAuth } from '../../context/AuthContext';
 
@@ -17,56 +17,71 @@ const btn = (color, bg, border) => ({
 export default function BUPlanning({ printRef }) {
   const { user } = useAuth();
   const canEdit = user?.role === 'admin' || user?.role === 'recruiter';
-  const [data, setData]       = useState(null);
-  const [saving, setSaving]   = useState(false);
-  const [saved, setSaved]     = useState(false);
-  const [editing, setEditing] = useState({});
-  const [draft, setDraft]     = useState({});
 
-  useEffect(() => { getKnowledge('bu_planning').then(d => { if (d) setData(d); }); }, []);
+  const [data, setData]         = useState(null);
+  const [loaded, setLoaded]     = useState(false);
+  const [editing, setEditing]   = useState({});
+  const [draft, setDraft]       = useState({});
+  const [saveStatus, setSaveStatus] = useState('idle');
+  const saveTimer = useRef(null);
+
+  useEffect(() => {
+    getKnowledge('bu_planning').then(d => {
+      if (d) setData(d);
+      setLoaded(true);
+    });
+  }, []);
+
+  // #20 — Autosave (fires on committed data changes)
+  useEffect(() => {
+    if (!loaded || !data) return;
+    clearTimeout(saveTimer.current);
+    setSaveStatus('saving');
+    saveTimer.current = setTimeout(async () => {
+      try {
+        await saveKnowledge('bu_planning', data);
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2000);
+      } catch { setSaveStatus('idle'); }
+    }, 2000);
+    return () => clearTimeout(saveTimer.current);
+  }, [data, loaded]);
 
   if (!data) return <div style={{ padding: 40, color: C.muted, textAlign: 'center' }}>Loading…</div>;
 
-  function startEdit(bid) {
-    const bu = data.bus.find(b => b.id === bid);
-    setDraft(d => ({ ...d, [bid]: JSON.parse(JSON.stringify(bu)) }));
-    setEditing(e => ({ ...e, [bid]: true }));
-  }
-  function cancelEdit(bid) {
-    setEditing(e => ({ ...e, [bid]: false }));
-    setDraft(d => { const c = { ...d }; delete c[bid]; return c; });
-  }
-  function commitEdit(bid) {
-    const updated = data.bus.map(b => b.id === bid ? draft[bid] : b);
-    setData({ bus: updated });
-    setEditing(e => ({ ...e, [bid]: false }));
-    setDraft(d => { const c = { ...d }; delete c[bid]; return c; });
-  }
-
-  async function saveAll(busOverride) {
-    setSaving(true);
-    try {
-      const payload = { bus: busOverride || data.bus };
-      await saveKnowledge('bu_planning', payload);
-      setData(payload);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } finally { setSaving(false); }
-  }
-
+  /* ── BU CRUD ── */
   function addBU() {
     const dims = ['BU Overview', 'Products', 'Journey from Today to 5YP', 'Capability Gaps', 'Key Skills to be Hired', 'Where to Hire From / Not to Hire From', 'Assessments', 'HC Now & Later'];
     const years = ['Y1', 'Y2', 'Y3', 'Y4', 'Y5'];
     const dataObj = {};
     dims.forEach(d => { dataObj[d] = {}; years.forEach(y => { dataObj[d][y] = ''; }); });
     const newBU = { id: uid(), title: 'New BU Head | Product', leader: '', specialization: '', years, dimensions: dims, data: dataObj };
-    setData({ bus: [...data.bus, newBU] });
-  }
-  function removeBU(bid) {
-    setData({ bus: data.bus.filter(b => b.id !== bid) });
+    setData(prev => ({ bus: [...prev.bus, newBU] }));
   }
 
-  /* draft helpers */
+  function removeBU(bid) {
+    setData(prev => ({ bus: prev.bus.filter(b => b.id !== bid) }));
+  }
+
+  /* ── Edit lifecycle per BU ── */
+  function startEdit(bid) {
+    const bu = data.bus.find(b => b.id === bid);
+    setDraft(d => ({ ...d, [bid]: JSON.parse(JSON.stringify(bu)) }));
+    setEditing(e => ({ ...e, [bid]: true }));
+  }
+
+  function cancelEdit(bid) {
+    setEditing(e => ({ ...e, [bid]: false }));
+    setDraft(d => { const c = { ...d }; delete c[bid]; return c; });
+  }
+
+  function commitEdit(bid) {
+    setData(prev => ({ bus: prev.bus.map(b => b.id === bid ? draft[bid] : b) }));
+    setEditing(e => ({ ...e, [bid]: false }));
+    setDraft(d => { const c = { ...d }; delete c[bid]; return c; });
+  }
+
+  /* ── Draft helpers ── */
   function dSetField(bid, field, val) {
     setDraft(d => ({ ...d, [bid]: { ...d[bid], [field]: val } }));
   }
@@ -141,6 +156,8 @@ export default function BUPlanning({ printRef }) {
     });
   }
 
+  const statusLabel = saveStatus === 'saving' ? '⟳ Autosaving…' : saveStatus === 'saved' ? '✓ Autosaved' : '';
+
   return (
     <div ref={printRef} style={{ padding: '28px 32px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
@@ -148,14 +165,10 @@ export default function BUPlanning({ printRef }) {
           <h2 style={{ margin: 0, color: C.blue, fontSize: 22, fontWeight: 700 }}>BU Planning</h2>
           <p style={{ margin: '4px 0 0', color: C.muted, fontSize: 13 }}>5-year workforce and capability planning per Business Unit</p>
         </div>
-        {canEdit && (
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button style={btn(C.blue, C.lightBlue, C.blue)} onClick={addBU}>+ Add BU</button>
-            <button style={btn('#fff', saving ? '#93A8DC' : C.blue, C.blue)} onClick={() => saveAll()} disabled={saving}>
-              {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save All Changes'}
-            </button>
-          </div>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {statusLabel && <span style={{ fontSize: 12, color: saveStatus === 'saved' ? '#16A34A' : C.muted }}>{statusLabel}</span>}
+          {canEdit && <button style={btn(C.blue, C.lightBlue, C.blue)} onClick={addBU}>+ Add BU</button>}
+        </div>
       </div>
 
       {data.bus.map((bu) => {
@@ -205,9 +218,9 @@ export default function BUPlanning({ printRef }) {
                   <div style={{ display: 'flex', gap: 6, marginLeft: 12, flexShrink: 0 }}>
                     {isEdit ? (
                       <>
-                        <button style={btn(C.blue, C.lightBlue, C.blue)} onClick={dAddDimension.bind(null, bu.id)}>+ Row</button>
-                        <button style={btn(C.blue, C.lightBlue, C.blue)} onClick={dAddYear.bind(null, bu.id)}>+ Year</button>
-                        <button style={btn('#fff', C.blue, C.blue)} onClick={() => { commitEdit(bu.id); saveAll(data.bus.map(b => b.id === bu.id ? draft[bu.id] : b)); }}>Save</button>
+                        <button style={btn(C.blue, C.lightBlue, C.blue)} onClick={() => dAddDimension(bu.id)}>+ Row</button>
+                        <button style={btn(C.blue, C.lightBlue, C.blue)} onClick={() => dAddYear(bu.id)}>+ Year</button>
+                        <button style={btn('#fff', C.blue, C.blue)} onClick={() => commitEdit(bu.id)}>Done</button>
                         <button style={btn(C.muted, '#fff', C.border)} onClick={() => cancelEdit(bu.id)}>Cancel</button>
                       </>
                     ) : (
@@ -272,7 +285,7 @@ export default function BUPlanning({ printRef }) {
                               style={{ width: '100%', border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 7px', fontSize: 11, resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }}
                             />
                           ) : (
-                            <span style={{ color: (d.data[dim] || {})[yr] ? C.text : C.muted, fontStyle: (d.data[dim] || {})[yr] ? 'normal' : 'italic', lineHeight: 1.5, display: 'block', minHeight: 36 }}>
+                            <span style={{ color: (d.data[dim] || {})[yr] ? C.text : C.muted, fontStyle: (d.data[dim] || {})[yr] ? 'normal' : 'italic', lineHeight: 1.5, display: 'block', minHeight: 36, whiteSpace: 'pre-wrap' }}>
                               {(d.data[dim] || {})[yr] || '—'}
                             </span>
                           )}

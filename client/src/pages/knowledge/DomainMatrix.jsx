@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getKnowledge, saveKnowledge } from '../../api/index';
 import { useAuth } from '../../context/AuthContext';
 
@@ -14,75 +14,99 @@ const btn = (color, bg, border) => ({
   color, background: bg || 'transparent',
 });
 
+// #16 — default text for SPOC contact columns
+const SPOC_COLS  = ['SPOC Contact', 'Woven SPOC Contact'];
+const SPOC_DEFAULT = 'Email: \nDial: ';
+
 export default function DomainMatrix({ printRef }) {
   const { user } = useAuth();
   const canEdit = user?.role === 'admin' || user?.role === 'recruiter';
-  const [data, setData]       = useState(null);
-  const [isEdit, setIsEdit]   = useState(false);
-  const [draft, setDraft]     = useState(null);
-  const [saving, setSaving]   = useState(false);
-  const [saved, setSaved]     = useState(false);
 
-  useEffect(() => { getKnowledge('domain_matrix').then(d => { if (d) setData(d); }); }, []);
+  const [data, setData]         = useState(null);
+  const [loaded, setLoaded]     = useState(false);
+  const [isEdit, setIsEdit]     = useState(false);
+  const [saveStatus, setSaveStatus] = useState('idle');
+  const saveTimer = useRef(null);
+
+  useEffect(() => {
+    getKnowledge('domain_matrix').then(d => {
+      if (d) setData(d);
+      setLoaded(true);
+    });
+  }, []);
+
+  // #20 — Autosave
+  useEffect(() => {
+    if (!loaded || !data) return;
+    clearTimeout(saveTimer.current);
+    setSaveStatus('saving');
+    saveTimer.current = setTimeout(async () => {
+      try {
+        await saveKnowledge('domain_matrix', data);
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2000);
+      } catch { setSaveStatus('idle'); }
+    }, 2000);
+    return () => clearTimeout(saveTimer.current);
+  }, [data, loaded]);
 
   if (!data) return <div style={{ padding: 40, color: C.muted, textAlign: 'center' }}>Loading…</div>;
 
-  function startEdit() {
-    setDraft(JSON.parse(JSON.stringify(data)));
-    setIsEdit(true);
-  }
-  function cancelEdit() { setIsEdit(false); setDraft(null); }
-
-  async function saveEdit() {
-    setSaving(true);
-    try {
-      await saveKnowledge('domain_matrix', draft);
-      setData(draft);
-      setIsEdit(false);
-      setDraft(null);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } finally { setSaving(false); }
-  }
-
-  /* draft helpers */
+  /* ── helpers ── */
   function setCellValue(rowId, col, val) {
-    setDraft(d => {
-      const rows = d.rows.map(r => r.id === rowId ? { ...r, [col]: val } : r);
-      return { ...d, rows };
-    });
+    setData(d => ({ ...d, rows: d.rows.map(r => r.id === rowId ? { ...r, [col]: val } : r) }));
   }
+
   function setColName(ci, val) {
-    setDraft(d => {
+    setData(d => {
       const oldName = d.columns[ci];
+      if (oldName === val) return d;
       const newCols = d.columns.map((c, i) => i === ci ? val : c);
       const newRows = d.rows.map(r => {
-        const newRow = { ...r };
-        if (oldName !== val) { newRow[val] = newRow[oldName] ?? ''; delete newRow[oldName]; }
-        return newRow;
+        const nr = { ...r, [val]: r[oldName] ?? '' };
+        delete nr[oldName];
+        return nr;
       });
       return { columns: newCols, rows: newRows };
     });
   }
+
   function addRow() {
-    setDraft(d => {
+    setData(d => {
       const newRow = { id: uid() };
-      d.columns.forEach(c => { newRow[c] = ''; });
+      d.columns.forEach(c => {
+        // #16 — pre-fill SPOC columns with Email/Dial template
+        newRow[c] = SPOC_COLS.includes(c) ? SPOC_DEFAULT : '';
+      });
       return { ...d, rows: [...d.rows, newRow] };
     });
   }
+
   function removeRow(rowId) {
-    setDraft(d => ({ ...d, rows: d.rows.filter(r => r.id !== rowId) }));
+    setData(d => ({ ...d, rows: d.rows.filter(r => r.id !== rowId) }));
   }
-  function addColumn() {
-    const name = `Col ${Date.now().toString(36).slice(-4)}`;
-    setDraft(d => ({
-      columns: [...d.columns, name],
-      rows: d.rows.map(r => ({ ...r, [name]: '' })),
+
+  function addColumn(name) {
+    const colName = name || `Col ${Date.now().toString(36).slice(-4)}`;
+    const defaultVal = SPOC_COLS.includes(colName) ? SPOC_DEFAULT : '';
+    setData(d => ({
+      columns: [...d.columns, colName],
+      rows: d.rows.map(r => ({ ...r, [colName]: defaultVal })),
     }));
   }
+
+  function addSpocCol(name) {
+    setData(d => {
+      if (d.columns.includes(name)) return d;
+      return {
+        columns: [...d.columns, name],
+        rows: d.rows.map(r => ({ ...r, [name]: SPOC_DEFAULT })),
+      };
+    });
+  }
+
   function removeColumn(ci) {
-    setDraft(d => {
+    setData(d => {
       const col = d.columns[ci];
       const newCols = d.columns.filter((_, i) => i !== ci);
       const newRows = d.rows.map(r => { const nr = { ...r }; delete nr[col]; return nr; });
@@ -90,7 +114,7 @@ export default function DomainMatrix({ printRef }) {
     });
   }
 
-  const display = isEdit ? draft : data;
+  const statusLabel = saveStatus === 'saving' ? '⟳ Autosaving…' : saveStatus === 'saved' ? '✓ Autosaved' : '';
 
   return (
     <div ref={printRef} style={{ padding: '28px 32px' }}>
@@ -99,32 +123,34 @@ export default function DomainMatrix({ printRef }) {
           <h2 style={{ margin: 0, color: C.blue, fontSize: 22, fontWeight: 700 }}>Domain Matrix</h2>
           <p style={{ margin: '4px 0 0', color: C.muted, fontSize: 13 }}>Business domain landscape with leadership, capability, and manpower data</p>
         </div>
-        {canEdit && (
-          <div style={{ display: 'flex', gap: 8 }}>
-            {isEdit ? (
-              <>
-                <button style={btn(C.blue, C.lightBlue, C.blue)} onClick={addRow}>+ Row</button>
-                <button style={btn(C.blue, C.lightBlue, C.blue)} onClick={addColumn}>+ Column</button>
-                <button style={btn('#fff', saving ? '#93A8DC' : C.blue, C.blue)} onClick={saveEdit} disabled={saving}>
-                  {saving ? 'Saving…' : 'Save Changes'}
-                </button>
-                <button style={btn(C.muted, '#fff', C.border)} onClick={cancelEdit}>Cancel</button>
-              </>
-            ) : (
-              <button style={btn(C.blue, C.lightBlue, C.blue)} onClick={startEdit}>
-                {saved ? '✓ Saved' : 'Edit Matrix'}
-              </button>
-            )}
-          </div>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {statusLabel && <span style={{ fontSize: 12, color: saveStatus === 'saved' ? '#16A34A' : C.muted }}>{statusLabel}</span>}
+          {canEdit && isEdit && (
+            <>
+              <button style={btn(C.blue, C.lightBlue, C.blue)} onClick={addRow}>+ Row</button>
+              <button style={btn(C.blue, C.lightBlue, C.blue)} onClick={() => addColumn()}>+ Column</button>
+              {/* #16 — quick-add SPOC columns */}
+              {!data.columns.includes('SPOC Contact') && (
+                <button style={btn('#7C3AED', '#F5F3FF', '#C4B5FD')} onClick={() => addSpocCol('SPOC Contact')}>+ SPOC Contact</button>
+              )}
+              {!data.columns.includes('Woven SPOC Contact') && (
+                <button style={btn('#7C3AED', '#F5F3FF', '#C4B5FD')} onClick={() => addSpocCol('Woven SPOC Contact')}>+ Woven SPOC</button>
+              )}
+              <button style={btn(C.muted, '#fff', C.border)} onClick={() => setIsEdit(false)}>Done</button>
+            </>
+          )}
+          {canEdit && !isEdit && (
+            <button style={btn(C.blue, C.lightBlue, C.blue)} onClick={() => setIsEdit(true)}>Edit Matrix</button>
+          )}
+        </div>
       </div>
 
       <div style={{ overflowX: 'auto', borderRadius: 12, border: `1px solid ${C.border}`, background: C.card }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
           <thead>
             <tr style={{ background: C.blue }}>
-              {display.columns.map((col, ci) => (
-                <th key={ci} style={{ padding: '11px 14px', textAlign: 'left', color: '#fff', fontSize: 12, fontWeight: 700, letterSpacing: 0.3, whiteSpace: 'nowrap', position: 'relative' }}>
+              {data.columns.map((col, ci) => (
+                <th key={ci} style={{ padding: '11px 14px', textAlign: 'left', color: '#fff', fontSize: 12, fontWeight: 700, letterSpacing: 0.3, whiteSpace: 'nowrap' }}>
                   {isEdit ? (
                     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                       <input
@@ -143,9 +169,9 @@ export default function DomainMatrix({ printRef }) {
             </tr>
           </thead>
           <tbody>
-            {display.rows.map((row, ri) => (
+            {data.rows.map((row, ri) => (
               <tr key={row.id} style={{ background: ri % 2 === 0 ? '#fff' : '#FAFBFF', borderBottom: `1px solid ${C.border}` }}>
-                {display.columns.map((col, ci) => (
+                {data.columns.map((col, ci) => (
                   <td key={ci} style={{ padding: '9px 14px', fontSize: 12, color: C.text, verticalAlign: 'top' }}>
                     {isEdit ? (
                       <textarea
@@ -155,7 +181,8 @@ export default function DomainMatrix({ printRef }) {
                         style={{ width: '100%', border: `1px solid ${C.border}`, borderRadius: 4, padding: '4px 7px', fontSize: 12, resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box', minWidth: ci === 0 ? 160 : 90 }}
                       />
                     ) : (
-                      <span style={{ display: 'block', whiteSpace: ci === display.columns.length - 1 ? 'normal' : 'nowrap', maxWidth: ci === display.columns.length - 1 ? 280 : 'none' }}>
+                      // #17 — white-space: pre-wrap so newlines in SPOC cells render
+                      <span style={{ display: 'block', whiteSpace: 'pre-wrap', maxWidth: ci === data.columns.length - 1 ? 280 : 'none' }}>
                         {row[col] || <span style={{ color: C.muted, fontStyle: 'italic' }}>—</span>}
                       </span>
                     )}
@@ -174,7 +201,7 @@ export default function DomainMatrix({ printRef }) {
 
       {isEdit && (
         <div style={{ marginTop: 12, color: C.muted, fontSize: 12 }}>
-          💡 Tip: Click column headers to rename them. Use + Row / + Column to add, ✕ to remove.
+          💡 Edit column headers inline. Use +Row / +Column to add, ✕ to remove. Changes autosave.
         </div>
       )}
     </div>

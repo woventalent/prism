@@ -11,7 +11,7 @@ const C = {
 
 const TABS = [
   { id: 'company',  label: '🏢  Company Profile' },
-  { id: 'locations',label: '📍  Locations' },
+  { id: 'locations',label: '📍  Capability Report' },
   { id: 'domains',  label: '🎯  Domain Matrix' },
   { id: 'bu',       label: '📊  BU Planning' },
 ];
