@@ -47,7 +47,7 @@ export default function Layout() {
         {/* Branding */}
         <div>
           <div style={s.logo}>{client?.name || 'Prism · Woven Talent'}</div>
-          <div style={s.sub}>Talent Intelligence Platform</div>
+          <div style={s.sub}>{client?.description || 'Talent Intelligence Platform'}</div>
         </div>
 
 
