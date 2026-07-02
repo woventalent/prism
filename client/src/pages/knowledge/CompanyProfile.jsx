@@ -242,11 +242,19 @@ export default function CompanyProfile({ printRef }) {
           <div key={sec.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 20, overflow: 'hidden' }}>
             {/* section header */}
             <div style={{ background: C.lightBlue, padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: `1px solid ${C.border}` }}>
-              {/* #18 — reorder arrows */}
+              {/* #18 — section reorder arrows */}
               {canEdit && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
-                  <button style={iconBtn(si === 0 ? '#CBD5E1' : C.blue)} onClick={() => moveSection(sec.id, -1)} disabled={si === 0}>▲</button>
-                  <button style={iconBtn(si === data.sections.length - 1 ? '#CBD5E1' : C.blue)} onClick={() => moveSection(sec.id, 1)} disabled={si === data.sections.length - 1}>▼</button>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
+                  <button
+                    onClick={() => moveSection(sec.id, -1)}
+                    disabled={si === 0}
+                    style={{ background: si === 0 ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.4)', color: si === 0 ? 'rgba(255,255,255,0.25)' : '#fff', width: 24, height: 22, borderRadius: 4, cursor: si === 0 ? 'default' : 'pointer', fontSize: 11, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  >▲</button>
+                  <button
+                    onClick={() => moveSection(sec.id, 1)}
+                    disabled={si === data.sections.length - 1}
+                    style={{ background: si === data.sections.length - 1 ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.4)', color: si === data.sections.length - 1 ? 'rgba(255,255,255,0.25)' : '#fff', width: 24, height: 22, borderRadius: 4, cursor: si === data.sections.length - 1 ? 'default' : 'pointer', fontSize: 11, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  >▼</button>
                 </div>
               )}
 
@@ -278,34 +286,47 @@ export default function CompanyProfile({ printRef }) {
             <div style={{ padding: '16px 20px' }}>
               {sec.subsections.map((sub, subI) => (
                 <div key={sub.id} style={{ marginBottom: 20, paddingBottom: 20, borderBottom: subI < sec.subsections.length - 1 ? `1px dashed ${C.border}` : 'none' }}>
-                  {isEdit ? (
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
-                      {/* #18 — subsection reorder */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                        <button style={iconBtn(subI === 0 ? '#CBD5E1' : C.blue)} onClick={() => moveSub(sec.id, sub.id, -1)} disabled={subI === 0}>▲</button>
-                        <button style={iconBtn(subI === sec.subsections.length - 1 ? '#CBD5E1' : C.blue)} onClick={() => moveSub(sec.id, sub.id, 1)} disabled={subI === sec.subsections.length - 1}>▼</button>
+                  {/* #18 — subsection header: reorder arrows always visible for admin */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                    {canEdit && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
+                        <button
+                          onClick={() => moveSub(sec.id, sub.id, -1)}
+                          disabled={subI === 0}
+                          style={{ background: subI === 0 ? '#F1F5F9' : C.lightBlue, border: `1px solid ${subI === 0 ? C.border : '#93A8DC'}`, color: subI === 0 ? '#CBD5E1' : C.blue, width: 22, height: 20, borderRadius: 3, cursor: subI === 0 ? 'default' : 'pointer', fontSize: 10, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >▲</button>
+                        <button
+                          onClick={() => moveSub(sec.id, sub.id, 1)}
+                          disabled={subI === sec.subsections.length - 1}
+                          style={{ background: subI === sec.subsections.length - 1 ? '#F1F5F9' : C.lightBlue, border: `1px solid ${subI === sec.subsections.length - 1 ? C.border : '#93A8DC'}`, color: subI === sec.subsections.length - 1 ? '#CBD5E1' : C.blue, width: 22, height: 20, borderRadius: 3, cursor: subI === sec.subsections.length - 1 ? 'default' : 'pointer', fontSize: 10, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >▼</button>
                       </div>
-                      <input
-                        value={sub.title}
-                        onChange={e => updateSubsection(sec.id, sub.id, 'title', e.target.value)}
-                        placeholder="Subsection title"
-                        style={{ flex: 1, fontSize: 13, fontWeight: 600, border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 10px', fontFamily: 'inherit' }}
-                      />
-                      {/* #19 — type selector now includes table */}
-                      <select
-                        value={sub.type}
-                        onChange={e => updateSubsection(sec.id, sub.id, 'type', e.target.value)}
-                        style={{ border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 8px', fontSize: 12, fontFamily: 'inherit' }}
-                      >
-                        <option value="text">Text</option>
-                        <option value="list">List</option>
-                        <option value="table">Table</option>
-                      </select>
-                      <button style={btn(C.red, '#FEF2F2', '#FCA5A5')} onClick={() => removeSubsection(sec.id, sub.id)}>✕</button>
-                    </div>
-                  ) : (
-                    <h4 style={{ margin: '0 0 8px', color: C.text, fontSize: 13, fontWeight: 600 }}>{sub.title}</h4>
-                  )}
+                    )}
+
+                    {isEdit ? (
+                      <>
+                        <input
+                          value={sub.title}
+                          onChange={e => updateSubsection(sec.id, sub.id, 'title', e.target.value)}
+                          placeholder="Subsection title"
+                          style={{ flex: 1, fontSize: 13, fontWeight: 600, border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 10px', fontFamily: 'inherit' }}
+                        />
+                        {/* #19 — type selector now includes table */}
+                        <select
+                          value={sub.type}
+                          onChange={e => updateSubsection(sec.id, sub.id, 'type', e.target.value)}
+                          style={{ border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 8px', fontSize: 12, fontFamily: 'inherit' }}
+                        >
+                          <option value="text">Text</option>
+                          <option value="list">List</option>
+                          <option value="table">Table</option>
+                        </select>
+                        <button style={btn(C.red, '#FEF2F2', '#FCA5A5')} onClick={() => removeSubsection(sec.id, sub.id)}>✕</button>
+                      </>
+                    ) : (
+                      <h4 style={{ margin: 0, color: C.text, fontSize: 13, fontWeight: 600 }}>{sub.title}</h4>
+                    )}
+                  </div>
 
                   {/* #14 #17 #19 — content rendering by type */}
                   {sub.type === 'text' && (
