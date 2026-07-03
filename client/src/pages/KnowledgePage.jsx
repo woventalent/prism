@@ -54,7 +54,9 @@ function ManageTabsPanel({ tabs: initial, onSave, onCancel }) {
       return arr;
     });
   }
-  function remove(id) { setDraft(d => d.filter(t => t.id !== id)); }
+  function remove(id) {
+    setDraft(d => d.length > 1 ? d.filter(t => t.id !== id) : d);
+  }
   function addTab() {
     if (draft.length >= MAX_TABS) return;
     setDraft(d => [...d, { id: `custom_${uid()}`, name: 'New Tab', icon: '📄', isBuiltIn: false }]);
@@ -109,18 +111,19 @@ function ManageTabsPanel({ tabs: initial, onSave, onCancel }) {
               style={{ flex: 1, border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 10px', fontSize: 13, fontFamily: 'inherit', fontWeight: 500 }}
             />
 
-            {/* badge / delete */}
-            {tab.isBuiltIn ? (
-              <span style={{ fontSize: 11, color: C.muted, padding: '3px 8px', background: '#F1F5F9', borderRadius: 4, flexShrink: 0 }}>Built-in</span>
-            ) : (
-              <button onClick={() => remove(tab.id)} style={{ ...btn(C.red, '#FEF2F2', '#FCA5A5'), flexShrink: 0 }}>Remove</button>
-            )}
+            {/* delete — any tab can be removed; minimum 1 tab */}
+            <button
+              onClick={() => remove(tab.id)}
+              disabled={draft.length <= 1}
+              title={draft.length <= 1 ? 'At least one tab is required' : 'Remove tab'}
+              style={{ ...btn(C.red, '#FEF2F2', '#FCA5A5'), flexShrink: 0, opacity: draft.length <= 1 ? 0.4 : 1, cursor: draft.length <= 1 ? 'not-allowed' : 'pointer' }}
+            >Remove</button>
           </div>
         ))}
       </div>
 
       <p style={{ margin: '10px 0 0', fontSize: 11, color: C.muted }}>
-        Built-in tabs can be renamed but not removed. Custom tab content uses the same rich-section editor as Company Profile. Max {MAX_TABS} tabs.
+        Any tab can be removed. Deleting a tab hides it from navigation — its content remains in the database and can be restored by re-adding a tab with the same name. Max {MAX_TABS} tabs.
       </p>
     </div>
   );
