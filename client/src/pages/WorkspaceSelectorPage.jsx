@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -7,6 +7,8 @@ const C = { blue: '#00259C', lightBlue: '#E8EDFB', border: '#E2E8F0', muted: '#6
 export default function WorkspaceSelectorPage() {
   const { user, clients, isSuperAdmin, logout } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => { document.title = 'Prism - Workspaces'; }, []);
 
   function enter(client) {
     localStorage.setItem('prism_client_id', client.id);

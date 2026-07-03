@@ -220,8 +220,12 @@ function UsersTab() {
 
 // ── Main Settings Page ────────────────────────────────────────
 export default function SettingsPage() {
-  const { canEdit } = useClient() || {};
+  const { canEdit, client } = useClient() || {};
   const [activeTab, setActiveTab] = useState(canEdit ? 'users' : 'account');
+
+  useEffect(() => {
+    document.title = client?.name ? `Prism - ${client.name} - Settings` : 'Prism - Settings';
+  }, [client]);
 
   const tabs = [
     ...(canEdit ? [{ id: 'users', label: '👥  Workspace Members' }] : []),

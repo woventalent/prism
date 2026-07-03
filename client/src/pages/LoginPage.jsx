@@ -14,6 +14,8 @@ export default function LoginPage() {
   const error = searchParams.get('error');
   const errorMsg = error ? (ERROR_MESSAGES[error] || decodeURIComponent(error)) : null;
 
+  useEffect(() => { document.title = 'Prism'; }, []);
+
   function handleMicrosoftLogin() {
     window.location.href = '/api/auth/microsoft';
   }

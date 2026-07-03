@@ -220,6 +220,8 @@ export default function SuperAdminPage() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
+  useEffect(() => { document.title = 'Prism - Super Admin'; }, []);
+
   const [clients,      setClients]      = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [managing,     setManaging]     = useState(null);

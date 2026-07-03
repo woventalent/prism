@@ -1,5 +1,6 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
+import { useClient } from '../context/ClientContext';
 import CompanyProfile from './knowledge/CompanyProfile';
 import Locations      from './knowledge/Locations';
 import DomainMatrix   from './knowledge/DomainMatrix';
@@ -50,11 +51,19 @@ function downloadSection(ref, title) {
 export default function KnowledgePage() {
   const { clientSlug } = useParams();
   const { pathname } = useLocation();
+  const { client } = useClient() || {};
   const sectionRef = useRef(null);
   const allRef     = useRef(null);
 
   const pathSegment = pathname.split('/').pop();
   const activeTab   = TABS.find(t => t.path === pathSegment) || TABS[0];
+
+  useEffect(() => {
+    const pageName = activeTab.label.replace(/[^\w\s]/g, '').trim();
+    document.title = client?.name
+      ? `Prism - ${client.name} - ${pageName}`
+      : `Prism - ${pageName}`;
+  }, [activeTab, client]);
   const ActiveComponent = activeTab.Component;
 
   return (
