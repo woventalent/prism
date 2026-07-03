@@ -82,12 +82,9 @@ export default function App() {
           <Route path="/super-admin" element={<SuperAdminRoute><SuperAdminPage /></SuperAdminRoute>} />
 
           <Route path="/w/:clientSlug" element={<PrivateRoute><WorkspaceLayout /></PrivateRoute>}>
-            <Route index                      element={<Navigate to="company-profile" replace />} />
-            <Route path="company-profile"     element={<KnowledgePage />} />
-            <Route path="capability-report"   element={<KnowledgePage />} />
-            <Route path="domain-matrix"       element={<KnowledgePage />} />
-            <Route path="bu-planning"         element={<KnowledgePage />} />
-            <Route path="settings"            element={<SettingsPage />} />
+            <Route index           element={<Navigate to="company-profile" replace />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path=":tabPath" element={<KnowledgePage />} />
           </Route>
 
           <Route path="/" element={<Navigate to="/workspaces" replace />} />

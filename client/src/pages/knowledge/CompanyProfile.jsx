@@ -110,7 +110,7 @@ function TableView({ table }) {
   );
 }
 
-export default function CompanyProfile({ printRef }) {
+export default function CompanyProfile({ printRef, sectionKey = 'company_profile', pageTitle = 'Company Profile' }) {
   const { canEdit } = useClient() || {};
 
   const [data, setData]             = useState(null);
@@ -120,11 +120,14 @@ export default function CompanyProfile({ printRef }) {
   const saveTimer = useRef(null);
 
   useEffect(() => {
-    getKnowledge('company_profile').then(d => {
+    setData(null);
+    setLoaded(false);
+    getKnowledge(sectionKey).then(d => {
       if (d) setData(d);
+      else setData({ sections: [] });
       setLoaded(true);
-    });
-  }, []);
+    }).catch(() => { setData({ sections: [] }); setLoaded(true); });
+  }, [sectionKey]);
 
   useEffect(() => {
     if (!loaded || !data) return;
@@ -132,7 +135,7 @@ export default function CompanyProfile({ printRef }) {
     setSaveStatus('saving');
     saveTimer.current = setTimeout(async () => {
       try {
-        await saveKnowledge('company_profile', data);
+        await saveKnowledge(sectionKey, data);
         setSaveStatus('saved');
         setTimeout(() => setSaveStatus('idle'), 2000);
       } catch { setSaveStatus('idle'); }
@@ -221,8 +224,7 @@ export default function CompanyProfile({ printRef }) {
       {/* header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>
-          <h2 style={{ margin: 0, color: C.blue, fontSize: 22, fontWeight: 700 }}>Company Profile</h2>
-          <p style={{ margin: '4px 0 0', color: C.muted, fontSize: 13 }}>Adani Defence &amp; Aerospace — Talent Acquisition Intelligence</p>
+          <h2 style={{ margin: 0, color: C.blue, fontSize: 22, fontWeight: 700 }}>{pageTitle}</h2>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {statusLabel && <span style={{ fontSize: 12, color: saveStatus === 'saved' ? '#16A34A' : C.muted }}>{statusLabel}</span>}
