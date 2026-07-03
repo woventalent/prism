@@ -20,9 +20,11 @@ const iconBtn = (color = C.muted) => ({
 });
 
 const WIDTH_OPTIONS = [
-  { val: 'full',  label: '⬛ Full',  css: '100%' },
-  { val: 'half',  label: '▬ Half',  css: 'calc(50% - 10px)' },
-  { val: 'third', label: '▬ 1/3',   css: 'calc(33.333% - 14px)' },
+  { val: 'full',       label: 'Full',  css: '100%' },
+  { val: 'two-thirds', label: '2/3',   css: 'calc(66.667% - 7px)' },
+  { val: 'half',       label: '1/2',   css: 'calc(50% - 10px)' },
+  { val: 'third',      label: '1/3',   css: 'calc(33.333% - 14px)' },
+  { val: 'quarter',    label: '1/4',   css: 'calc(25% - 15px)' },
 ];
 function sectionWidth(w) {
   return WIDTH_OPTIONS.find(o => o.val === w)?.css || '100%';
@@ -248,8 +250,8 @@ export default function CompanyProfile({ printRef }) {
             >
               {/* section header */}
               <div style={{ background: C.lightBlue, padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: `1px solid ${C.border}` }}>
-                {/* reorder arrows */}
-                {canEdit && (
+                {/* reorder arrows — only in edit mode */}
+                {isEdit && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
                     <button
                       onClick={() => moveSection(sec.id, -1)}
@@ -310,7 +312,7 @@ export default function CompanyProfile({ printRef }) {
                 {sec.subsections.map((sub, subI) => (
                   <div key={sub.id} style={{ marginBottom: 20, paddingBottom: 20, borderBottom: subI < sec.subsections.length - 1 ? `1px dashed ${C.border}` : 'none' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                      {canEdit && (
+                      {isEdit && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
                           <button
                             onClick={() => moveSub(sec.id, sub.id, -1)}
