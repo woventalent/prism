@@ -52,16 +52,22 @@ router.post('/', requireSuperAdmin, async (req, res) => {
 
 // ── PUT /api/clients/:id ──────────── super admin only ────────
 router.put('/:id', requireSuperAdmin, async (req, res) => {
-  const { name, description } = req.body;
+  const { name, slug, description } = req.body;
+  const cleanSlug = slug ? slug.toLowerCase().replace(/[^a-z0-9-]/g, '-') : undefined;
   try {
     const { rows } = await pool.query(
-      `UPDATE clients SET name = COALESCE($1,name), description = COALESCE($2,description), updated_at = NOW()
-       WHERE id = $3 RETURNING *`,
-      [name, description, parseInt(req.params.id)]
+      `UPDATE clients
+       SET name        = COALESCE($1, name),
+           slug        = COALESCE($2, slug),
+           description = COALESCE($3, description),
+           updated_at  = NOW()
+       WHERE id = $4 RETURNING *`,
+      [name, cleanSlug, description, parseInt(req.params.id)]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Client not found' });
     res.json(rows[0]);
   } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Slug already exists' });
     res.status(500).json({ error: 'Server error' });
   }
 });

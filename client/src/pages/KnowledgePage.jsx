@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useRef } from 'react';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import CompanyProfile from './knowledge/CompanyProfile';
 import Locations      from './knowledge/Locations';
 import DomainMatrix   from './knowledge/DomainMatrix';
@@ -10,10 +11,10 @@ const C = {
 };
 
 const TABS = [
-  { id: 'company',  label: '🏢  Company Profile' },
-  { id: 'locations',label: '📍  Capability Report' },
-  { id: 'domains',  label: '🎯  Domain Matrix' },
-  { id: 'bu',       label: '📊  BU Planning' },
+  { path: 'company-profile',   label: '🏢  Company Profile',  Component: CompanyProfile },
+  { path: 'capability-report', label: '📍  Capability Report', Component: Locations },
+  { path: 'domain-matrix',     label: '🎯  Domain Matrix',     Component: DomainMatrix },
+  { path: 'bu-planning',       label: '📊  BU Planning',       Component: BUPlanning },
 ];
 
 function downloadSection(ref, title) {
@@ -47,11 +48,14 @@ function downloadSection(ref, title) {
 }
 
 export default function KnowledgePage() {
-  const [activeTab, setActiveTab] = useState('company');
+  const { clientSlug } = useParams();
+  const { pathname } = useLocation();
   const sectionRef = useRef(null);
   const allRef     = useRef(null);
 
-  const tabLabel = TABS.find(t => t.id === activeTab)?.label || '';
+  const pathSegment = pathname.split('/').pop();
+  const activeTab   = TABS.find(t => t.path === pathSegment) || TABS[0];
+  const ActiveComponent = activeTab.Component;
 
   return (
     <div style={{ background: '#F4F7FB', minHeight: '100vh' }}>
@@ -60,27 +64,30 @@ export default function KnowledgePage() {
       <div style={{ background: '#fff', borderBottom: `1px solid ${C.border}`, padding: '0 32px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <nav style={{ display: 'flex', gap: 2 }}>
-            {TABS.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                style={{
-                  padding: '14px 18px', background: 'none', border: 'none', cursor: 'pointer',
-                  fontSize: 13, fontWeight: activeTab === tab.id ? 700 : 500,
-                  color: activeTab === tab.id ? C.blue : C.muted,
-                  borderBottom: activeTab === tab.id ? `2.5px solid ${C.blue}` : '2.5px solid transparent',
-                  transition: 'all 0.15s', fontFamily: 'inherit',
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
+            {TABS.map(tab => {
+              const isActive = tab.path === pathSegment;
+              return (
+                <Link
+                  key={tab.path}
+                  to={`/w/${clientSlug}/${tab.path}`}
+                  style={{
+                    padding: '14px 18px', textDecoration: 'none', display: 'block',
+                    fontSize: 13, fontWeight: isActive ? 700 : 500,
+                    color: isActive ? C.blue : C.muted,
+                    borderBottom: isActive ? `2.5px solid ${C.blue}` : '2.5px solid transparent',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {tab.label}
+                </Link>
+              );
+            })}
           </nav>
 
           {/* download buttons */}
           <div style={{ display: 'flex', gap: 8 }}>
             <button
-              onClick={() => downloadSection(sectionRef, tabLabel.replace(/[^\w\s]/g, '').trim())}
+              onClick={() => downloadSection(sectionRef, activeTab.label.replace(/[^\w\s]/g, '').trim())}
               style={{
                 padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600,
                 border: `1px solid ${C.border}`, background: '#fff', color: C.muted,
@@ -107,37 +114,16 @@ export default function KnowledgePage() {
 
       {/* visible section */}
       <div>
-        {activeTab === 'company'   && <CompanyProfile printRef={sectionRef} />}
-        {activeTab === 'locations' && <Locations      printRef={sectionRef} />}
-        {activeTab === 'domains'   && <DomainMatrix   printRef={sectionRef} />}
-        {activeTab === 'bu'        && <BUPlanning      printRef={sectionRef} />}
+        <ActiveComponent printRef={sectionRef} />
       </div>
 
       {/* hidden all-sections aggregator for "Download All" */}
       <div ref={allRef} style={{ display: 'none' }}>
-        <div><CompanyProfileStatic /></div>
-        <div style={{ marginTop: 32 }}><LocationsStatic /></div>
-        <div style={{ marginTop: 32 }}><DomainMatrixStatic /></div>
-        <div style={{ marginTop: 32 }}><BUPlanningStatic /></div>
+        {TABS.map(tab => {
+          const Cmp = tab.Component;
+          return <Cmp key={tab.path} printRef={{ current: null }} />;
+        })}
       </div>
     </div>
   );
-}
-
-/* ── Thin wrappers for "Download All" that share the same components ── */
-function CompanyProfileStatic() {
-  const r = useRef(null);
-  return <CompanyProfile printRef={r} />;
-}
-function LocationsStatic() {
-  const r = useRef(null);
-  return <Locations printRef={r} />;
-}
-function DomainMatrixStatic() {
-  const r = useRef(null);
-  return <DomainMatrix printRef={r} />;
-}
-function BUPlanningStatic() {
-  const r = useRef(null);
-  return <BUPlanning printRef={r} />;
 }
