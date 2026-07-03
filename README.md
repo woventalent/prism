@@ -1,14 +1,11 @@
 # Prism — Talent Intelligence Platform
 
-> A multi-tenant, client-scoped talent intelligence platform for Woven Talent. Each client organisation gets an isolated workspace containing their knowledge base, SPOC contacts, domain matrix, and BU planning data.
+> A multi-tenant, client-scoped talent intelligence platform. Each client organisation gets an isolated workspace containing their knowledge base, SPOC contacts, domain matrix, and BU planning data.
 
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green)](https://nodejs.org)
 [![React](https://img.shields.io/badge/React-18-blue)](https://react.dev)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue)](https://postgresql.org)
 [![Auth](https://img.shields.io/badge/Auth-Microsoft%20SSO-blue)](https://learn.microsoft.com/en-us/azure/active-directory/)
-
-**Production URL:** https://prism.woventalent.in  
-**GitHub:** https://github.com/woventalent/prism
 
 ---
 
@@ -80,9 +77,9 @@ prism/
             ├── SuperAdminPage.jsx      # Workspace + user management
             ├── SettingsPage.jsx        # Workspace member management
             └── knowledge/
-                ├── KnowledgePage.jsx       # Tab shell
+                ├── KnowledgePage.jsx       # Tab shell with URL-based routing
                 ├── CompanyProfile.jsx
-                ├── CapabilityReport.jsx
+                ├── Locations.jsx
                 ├── DomainMatrix.jsx
                 └── BUPlanning.jsx
 ```
@@ -92,11 +89,20 @@ prism/
 ## Features
 
 ### Knowledge Base (per workspace)
-Each client workspace has four knowledge modules, accessible at `/w/:clientSlug/prism`:
+
+Each client workspace has four knowledge modules with individual URLs:
+
+| Tab               | URL path                        |
+|-------------------|---------------------------------|
+| Company Profile   | `/w/:clientSlug/company-profile`   |
+| Capability Report | `/w/:clientSlug/capability-report` |
+| Domain Matrix     | `/w/:clientSlug/domain-matrix`     |
+| BU Planning       | `/w/:clientSlug/bu-planning`       |
 
 #### Company Profile
 - Rich-text sections and subsections with inline editing
 - Admins can reorder sections/subsections (▲▼), add/remove them
+- **Block sizing**: each section can be set to Full, Half, or 1/3 width — sizes persist to the database
 - 2-second debounced autosave
 
 #### Capability Report
@@ -115,14 +121,14 @@ Each client workspace has four knowledge modules, accessible at `/w/:clientSlug/
 - 5-year workforce planning per Business Unit
 - Per-BU: leader, domains, planning dimensions × year grid
 - Add/remove BUs, dimensions, and year columns
-- Y1–Y5 columns are center-aligned
+- Year columns are center-aligned
 
 ### Download
 - **Download Section** — exports the active tab as a PDF
 - **Download All** — exports all four sections as a combined PDF
 
 ### Super Admin Panel (`/super-admin`)
-- Create, edit, and delete client workspaces
+- Create, edit, and delete client workspaces (name, slug, description)
 - Manage users across all workspaces
 - Enter any workspace as admin
 
@@ -146,10 +152,13 @@ Prism uses a three-tier role model:
 
 ### URL structure
 ```
-/workspaces              → workspace selector (after login)
-/super-admin             → super admin panel
-/w/:clientSlug/prism     → workspace knowledge base
-/w/:clientSlug/settings  → workspace settings (member management)
+/workspaces                         → workspace selector (after login)
+/super-admin                        → super admin panel
+/w/:clientSlug/company-profile      → Company Profile
+/w/:clientSlug/capability-report    → Capability Report
+/w/:clientSlug/domain-matrix        → Domain Matrix
+/w/:clientSlug/bu-planning          → BU Planning
+/w/:clientSlug/settings             → workspace settings (member management)
 ```
 
 ---
@@ -164,11 +173,11 @@ Prism uses **Microsoft Entra ID (Azure AD)** for authentication. Username/passwo
 1. User clicks "Sign in with Microsoft"
 2. Browser navigates to GET /api/auth/microsoft
 3. Server generates an auth URL and redirects to Microsoft
-4. User authenticates with their @woventalent.in account
+4. User authenticates with their Microsoft account (restricted to the configured tenant/domain)
 5. Microsoft redirects to GET /api/auth/microsoft/callback?code=...
 6. Server validates:
    - Tenant ID must match AZURE_TENANT_ID
-   - Email domain must be @woventalent.in
+   - Email domain must match AZURE_ALLOWED_DOMAIN
 7. Server finds or creates the user in the DB (matched by email)
 8. Server issues a Prism JWT, redirects to /auth/callback?payload=<base64>
 9. Frontend stores the JWT, navigates to workspace selector or workspace
@@ -178,7 +187,7 @@ Prism uses **Microsoft Entra ID (Azure AD)** for authentication. Username/passwo
 
 In Azure Portal → App registrations → your app:
 
-1. **Redirect URI** (Web): `https://prism.woventalent.in/api/auth/microsoft/callback`
+1. **Redirect URI** (Web): `https://your-domain.com/api/auth/microsoft/callback`
 2. **Client Secret**: create one, note the value and secret ID
 3. **API Permissions**: `openid`, `profile`, `email` (Microsoft Graph — delegated)
 
@@ -196,14 +205,14 @@ PORT=4000
 DATABASE_URL=postgresql://rcc_user:YOUR_DB_PASSWORD@localhost:5432/rcc_db
 JWT_SECRET=your_long_random_secret_here
 JWT_EXPIRES_IN=7d
-CLIENT_ORIGIN=https://prism.woventalent.in
+CLIENT_ORIGIN=https://your-domain.com
 
 # Microsoft Entra ID SSO
 AZURE_CLIENT_ID=your_azure_app_client_id
 AZURE_CLIENT_SECRET=your_azure_client_secret_value
 AZURE_TENANT_ID=your_azure_tenant_id
-AZURE_REDIRECT_URI=https://prism.woventalent.in/api/auth/microsoft/callback
-AZURE_ALLOWED_DOMAIN=woventalent.in
+AZURE_REDIRECT_URI=https://your-domain.com/api/auth/microsoft/callback
+AZURE_ALLOWED_DOMAIN=your-domain.com
 ```
 
 | Variable              | Description                                         |
@@ -236,7 +245,7 @@ node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 
 ### Step 1 — Clone the repo
 ```bash
-git clone https://github.com/woventalent/prism.git
+git clone <your-repo-url>
 cd prism
 ```
 
@@ -264,7 +273,7 @@ AZURE_CLIENT_ID=your_azure_app_client_id
 AZURE_CLIENT_SECRET=your_azure_client_secret
 AZURE_TENANT_ID=your_azure_tenant_id
 AZURE_REDIRECT_URI=http://localhost:4000/api/auth/microsoft/callback
-AZURE_ALLOWED_DOMAIN=woventalent.in
+AZURE_ALLOWED_DOMAIN=your-allowed-domain.com
 ```
 
 ### Step 4 — Install dependencies
@@ -296,16 +305,16 @@ Open → **http://localhost:5173**
 
 ## Production Deployment
 
-The production server runs on a VPS (DigitalOcean / Hetzner) with:
+The production server runs on a VPS with:
 - **PM2** managing the Node.js API process
 - **Caddy** (running in Docker) as the reverse proxy with automatic HTTPS
 
 ### Deploy steps
 
 ```bash
-ssh root@YOUR_SERVER_IP
+ssh user@YOUR_SERVER_IP
 
-cd /var/www/rcc
+cd /path/to/prism
 
 # Pull latest code
 git pull origin master
@@ -322,25 +331,25 @@ pm2 restart rcc-api --update-env
 
 ### Caddy configuration
 
-Caddy runs inside a Docker container. The `Caddyfile` (at `/opt/plane-deploy/plane-app/Caddyfile`) contains:
+Caddy runs inside a Docker container. Example `Caddyfile`:
 
 ```caddy
-prism.woventalent.in {
+your-domain.com {
     reverse_proxy 172.18.0.1:4000
 }
 ```
 
 After editing the Caddyfile:
 ```bash
-docker restart plane-app-proxy-1
+docker restart <caddy-container-name>
 ```
 
 ### PM2 ecosystem file
 
-Located at `/var/www/rcc/ecosystem.config.js`. Key env vars:
+Key env var in your `ecosystem.config.js`:
 
 ```js
-CLIENT_ORIGIN: 'https://prism.woventalent.in'
+CLIENT_ORIGIN: 'https://your-domain.com'
 ```
 
 ### PM2 commands
@@ -380,7 +389,7 @@ This migration:
 1. Creates `clients` and `client_users` tables
 2. Adds `is_super_admin` to `users`
 3. Adds `client_id` to `knowledge_base`
-4. Migrates existing data to a default "Adani Defence & Aerospace" workspace
+4. Migrates existing data to the default workspace
 5. Promotes the first admin user to Super Admin
 
 ### Backup & restore
@@ -392,7 +401,7 @@ pg_dump $DATABASE_URL > backup_$(date +%Y%m%d).sql
 psql $DATABASE_URL < backup_20240101.sql
 
 # Connect directly
-psql postgresql://rcc_user:PASSWORD@localhost:5432/rcc_db
+psql $DATABASE_URL
 ```
 
 ---
@@ -458,8 +467,8 @@ After deploying for the first time:
 
 ### 1. Run the migration
 ```bash
-ssh root@YOUR_SERVER_IP
-cd /var/www/rcc && node server/db/migrate-multi-tenant.js
+ssh user@YOUR_SERVER_IP
+cd /path/to/prism && node server/db/migrate-multi-tenant.js
 ```
 
 ### 2. Promote a user to Super Admin
@@ -467,15 +476,15 @@ cd /var/www/rcc && node server/db/migrate-multi-tenant.js
 The first user to sign in via SSO can be promoted via SQL:
 
 ```bash
-psql postgresql://rcc_user:PASSWORD@localhost:5432/rcc_db << 'SQL'
+psql $DATABASE_URL << 'SQL'
 -- Promote user to Super Admin
-UPDATE users SET is_super_admin = TRUE WHERE email = 'you@woventalent.in';
+UPDATE users SET is_super_admin = TRUE WHERE email = 'you@your-domain.com';
 
 -- Add to a workspace as Admin
 INSERT INTO client_users (client_id, user_id, role)
 SELECT c.id, u.id, 'admin'
 FROM clients c, users u
-WHERE c.slug = 'your-workspace-slug' AND u.email = 'you@woventalent.in'
+WHERE c.slug = 'your-workspace-slug' AND u.email = 'you@your-domain.com'
 ON CONFLICT (client_id, user_id) DO UPDATE SET role = 'admin';
 SQL
 ```
@@ -483,7 +492,7 @@ SQL
 ### 3. Add more users
 Once logged in as Super Admin, use the **Super Admin panel** (`/super-admin`) to:
 - Create additional client workspaces
-- Edit workspace names and descriptions
+- Edit workspace names, slugs, and descriptions
 - Add users to workspaces via the "Manage Users" button
 
 ---
@@ -491,8 +500,8 @@ Once logged in as Super Admin, use the **Super Admin panel** (`/super-admin`) to
 ## Updating in Production
 
 ```bash
-ssh root@YOUR_SERVER_IP
-cd /var/www/rcc
+ssh user@YOUR_SERVER_IP
+cd /path/to/prism
 
 # Pull latest
 git pull origin master
@@ -509,7 +518,7 @@ pm2 restart rcc-api --update-env
 
 If the database schema changed, also run:
 ```bash
-node /var/www/rcc/server/db/migrate-multi-tenant.js
+node /path/to/prism/server/db/migrate-multi-tenant.js
 ```
 
 ---
@@ -518,7 +527,7 @@ node /var/www/rcc/server/db/migrate-multi-tenant.js
 
 ### Microsoft SSO — "unauthorized_domain" error
 - The signed-in Microsoft account's email domain doesn't match `AZURE_ALLOWED_DOMAIN`
-- Only `@woventalent.in` accounts are permitted
+- Check `AZURE_ALLOWED_DOMAIN` in `server/.env`
 
 ### Microsoft SSO — "unauthorized_tenant" error
 - The Microsoft account belongs to a different Azure AD tenant
@@ -529,7 +538,7 @@ node /var/www/rcc/server/db/migrate-multi-tenant.js
 - Try signing in again — this is normal if the tab was left idle
 
 ### SSO redirect URI mismatch
-- Azure Portal must have the exact URI: `https://prism.woventalent.in/api/auth/microsoft/callback`
+- Azure Portal must have the exact URI registered: `https://your-domain.com/api/auth/microsoft/callback`
 - For local dev: `http://localhost:4000/api/auth/microsoft/callback`
 
 ### API returns 401 on every request
@@ -542,7 +551,7 @@ node /var/www/rcc/server/db/migrate-multi-tenant.js
 
 ### Caddy not picking up config changes
 - `sed -i` changes the inode; Docker bind mount still points to the old inode
-- Fix: `docker restart plane-app-proxy-1`
+- Fix: `docker restart <caddy-container-name>`
 
 ### Blank page after frontend build
 - Ensure `npm run build` completed without errors
@@ -556,13 +565,5 @@ pm2 logs rcc-api --lines 50   # check for startup errors
 
 ### Database backup
 ```bash
-pg_dump postgresql://rcc_user:PASSWORD@localhost:5432/rcc_db > prism_backup_$(date +%Y%m%d).sql
+pg_dump $DATABASE_URL > prism_backup_$(date +%Y%m%d).sql
 ```
-
----
-
-## Repository
-
-**GitHub:** https://github.com/woventalent/prism  
-**Production:** https://prism.woventalent.in  
-**Maintained by:** Woven Talent Engineering
