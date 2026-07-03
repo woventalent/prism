@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getKnowledge, saveKnowledge } from '../../api/index';
-import { useAuth } from '../../context/AuthContext';
+import { useClient } from '../../context/ClientContext';
 import RichTextEditor, { RichTextView } from '../../components/RichTextEditor';
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -20,8 +20,7 @@ const iconBtn = (color = C.muted) => ({
 });
 
 export default function Locations({ printRef }) {
-  const { user } = useAuth();
-  const canEdit = user?.role === 'admin' || user?.role === 'recruiter';
+  const { canEdit } = useClient() || {};
 
   const [data, setData]         = useState(null);
   const [loaded, setLoaded]     = useState(false);
@@ -129,19 +128,19 @@ export default function Locations({ printRef }) {
             <div key={loc.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
               {/* location header */}
               <div style={{ background: C.blue, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                {/* #15 — reorder */}
-                {canEdit && (
+                {/* reorder arrows — only in edit mode */}
+                {isEdit && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
                     <button style={{ ...iconBtn('rgba(255,255,255,0.5)'), color: li === 0 ? 'rgba(255,255,255,0.2)' : '#fff' }} onClick={() => moveLoc(loc.id, -1)} disabled={li === 0}>▲</button>
                     <button style={{ ...iconBtn('rgba(255,255,255,0.5)'), color: li === data.locations.length - 1 ? 'rgba(255,255,255,0.2)' : '#fff' }} onClick={() => moveLoc(loc.id, 1)} disabled={li === data.locations.length - 1}>▼</button>
                   </div>
                 )}
 
-                {canEdit ? (
+                {isEdit ? (
                   <input
                     value={loc.name}
                     onChange={e => updateLoc(loc.id, l => ({ ...l, name: e.target.value }))}
-                    style={{ flex: 1, fontSize: 14, fontWeight: 700, color: C.blue, border: '1.5px solid rgba(255,255,255,0.5)', borderRadius: 6, padding: '3px 8px', fontFamily: 'inherit' }}
+                    style={{ flex: 1, fontSize: 14, fontWeight: 700, color: '#fff', background: 'rgba(255,255,255,0.15)', border: '1.5px solid rgba(255,255,255,0.5)', borderRadius: 6, padding: '3px 8px', fontFamily: 'inherit' }}
                   />
                 ) : (
                   <h3 style={{ margin: 0, flex: 1, color: '#fff', fontSize: 14, fontWeight: 700 }}>📍 {loc.name}</h3>
