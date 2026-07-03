@@ -46,8 +46,12 @@ export default function Layout() {
       <header style={s.header}>
         {/* Branding */}
         <div>
-          <div style={s.logo}>{client?.name || 'Prism · Woven Talent'}</div>
-          <div style={s.sub}>{client?.description || 'Talent Intelligence Platform'}</div>
+          <div style={s.logo}>
+            Prism
+            {client?.name && <span style={{ fontWeight: 400, opacity: 0.65, margin: '0 6px' }}>·</span>}
+            {client?.name && <span style={{ fontWeight: 700 }}>{client.name}</span>}
+          </div>
+          {client?.description && <div style={s.sub}>{client.description}</div>}
         </div>
 
 
