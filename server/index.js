@@ -9,20 +9,31 @@ const knowledgeRoutes = require('./routes/knowledge');
 const clientsRoutes   = require('./routes/clients');
 
 // ── Environment Variable Validation ────────────────────────────
-const coreRequiredVars = ['DATABASE_URL', 'JWT_SECRET', 'CLIENT_ORIGIN'];
-const azureVars = ['AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET', 'AZURE_TENANT_ID'];
+const requiredVars = {
+  DATABASE_URL:        { required: true,  description: 'PostgreSQL database connection URL' },
+  JWT_SECRET:          { required: true,  description: 'Secret key for JWT signing' },
+  CLIENT_ORIGIN:       { required: true,  description: 'Frontend origin for CORS' },
+  AZURE_CLIENT_ID:     { required: false, description: 'Azure AD application ID (for SSO)' },
+  AZURE_CLIENT_SECRET: { required: false, description: 'Azure AD application secret (for SSO)' },
+  AZURE_TENANT_ID:     { required: false, description: 'Azure AD tenant ID (for SSO)' },
+};
 
-const missingCoreVars = coreRequiredVars.filter(v => !process.env[v]);
-if (missingCoreVars.length > 0) {
-  console.error(`❌ Missing required environment variables: ${missingCoreVars.join(', ')}`);
+const missingRequired = Object.entries(requiredVars)
+  .filter(([key, { required }]) => required && !process.env[key])
+  .map(([key]) => key);
+
+if (missingRequired.length > 0) {
+  console.error(`❌ Missing required environment variables: ${missingRequired.join(', ')}`);
+  console.error('Set these in your .env file or as environment variables.');
   process.exit(1);
 }
 
-// If any Azure variable is set, all must be set (SSO all-or-nothing)
-const setAzureVars = azureVars.filter(v => process.env[v]);
-if (setAzureVars.length > 0 && setAzureVars.length < azureVars.length) {
-  const missingAzureVars = azureVars.filter(v => !process.env[v]);
-  console.warn(`⚠️  Azure SSO partially configured. Missing: ${missingAzureVars.join(', ')}. SSO will not work.`);
+// Check optional Azure SSO variables
+const azureVarsToCheck = ['AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET', 'AZURE_TENANT_ID'];
+const setAzureVars = azureVarsToCheck.filter(v => process.env[v]);
+if (setAzureVars.length > 0 && setAzureVars.length < azureVarsToCheck.length) {
+  const missingAzure = azureVarsToCheck.filter(v => !process.env[v]);
+  console.warn(`⚠️  Azure SSO partially configured (${setAzureVars.length}/${azureVarsToCheck.length}). Missing: ${missingAzure.join(', ')}. SSO will not be available.`);
 }
 
 const app  = express();
