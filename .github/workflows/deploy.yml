@@ -11,15 +11,21 @@ jobs:
 
     steps:
       - name: Setup SSH key
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/deploy_key
+          cat > ~/.ssh/deploy_key << 'EOF'
+          ${{ secrets.DEPLOY_KEY }}
+          EOF
+          chmod 700 ~/.ssh
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keygen -l -f ~/.ssh/deploy_key.pub 2>/dev/null || echo "Note: Public key not found (expected)"
 
       - name: Deploy to server
         run: |
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOFSCRIPT'
+          ssh -v -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=~/.ssh/known_hosts ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOFSCRIPT'
           set -e
           cd /var/www/rcc
           git pull origin master
