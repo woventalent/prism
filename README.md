@@ -215,18 +215,23 @@ AZURE_REDIRECT_URI=https://your-domain.com/api/auth/microsoft/callback
 AZURE_ALLOWED_DOMAIN=your-domain.com
 ```
 
-| Variable              | Description                                         |
-|-----------------------|-----------------------------------------------------|
-| `PORT`                | Express API port                                    |
-| `DATABASE_URL`        | Full PostgreSQL connection string                   |
-| `JWT_SECRET`          | Long random string for signing JWTs                 |
-| `JWT_EXPIRES_IN`      | Token lifetime (e.g. `7d`)                          |
-| `CLIENT_ORIGIN`       | Frontend origin for CORS + SSO redirect target      |
-| `AZURE_CLIENT_ID`     | Azure AD app (client) ID                            |
-| `AZURE_CLIENT_SECRET` | Azure AD client secret value                        |
-| `AZURE_TENANT_ID`     | Azure AD tenant ID                                  |
-| `AZURE_REDIRECT_URI`  | Must exactly match the redirect URI in Azure Portal |
-| `AZURE_ALLOWED_DOMAIN`| Only this email domain is permitted to sign in      |
+| Variable              | Required | Description                                         |
+|-----------------------|----------|-----------------------------------------------------|
+| `PORT`                | No       | Express API port (default: 4000)                    |
+| `DATABASE_URL`        | **Yes**  | Full PostgreSQL connection string                   |
+| `JWT_SECRET`          | **Yes**  | Long random string for signing JWTs                 |
+| `JWT_EXPIRES_IN`      | No       | Token lifetime (default: `7d`)                      |
+| `CLIENT_ORIGIN`       | **Yes**  | Frontend origin for CORS + SSO redirect target      |
+| `AZURE_CLIENT_ID`     | No*      | Azure AD app (client) ID (*required if SSO enabled) |
+| `AZURE_CLIENT_SECRET` | No*      | Azure AD client secret value (*required if SSO enabled) |
+| `AZURE_TENANT_ID`     | No*      | Azure AD tenant ID (*required if SSO enabled)       |
+| `AZURE_REDIRECT_URI`  | No       | Must exactly match the redirect URI in Azure Portal |
+| `AZURE_ALLOWED_DOMAIN`| No       | Only this email domain is permitted to sign in      |
+
+**⚠️ Required environment variables validation:**
+- Server will fail to start if `DATABASE_URL`, `JWT_SECRET`, or `CLIENT_ORIGIN` are missing
+- If any Azure SSO variable is partially configured, a warning is logged but startup continues
+- For production, ensure all required variables are set in your `.env` file or deployment environment
 
 > ⚠️ Never commit `server/.env` to version control.
 
@@ -458,6 +463,36 @@ Sections: `company_profile`, `capability_report`, `domain_matrix`, `bu_planning`
 ```
 GET /api/health   →   { "status": "ok", "ts": "..." }
 ```
+
+---
+
+## Security & Validation
+
+### Startup Validation
+The server validates all required environment variables on startup:
+- **Critical**: `DATABASE_URL`, `JWT_SECRET`, `CLIENT_ORIGIN` — server fails to start if missing
+- **Optional**: Azure SSO variables — server logs a warning if partially configured but still starts
+
+This prevents silent failures in production due to misconfiguration.
+
+### API Validation
+
+#### Knowledge Base Routes
+- **Section Parameter**: Only valid sections are accepted (`company-profile`, `capability-report`, `domain-matrix`, `bu-planning`). Invalid sections return `400 Bad Request`.
+- **PUT Endpoint**: 
+  - Request body must be a valid JSON object (not null, string, or array)
+  - Maximum payload size is 1MB to prevent storage and memory issues
+  - Invalid payloads return `400 Bad Request` with descriptive error messages
+
+#### CORS Configuration
+- `CLIENT_ORIGIN` environment variable is required and strictly enforced
+- No wildcard (`*`) CORS origin in production — prevents unsafe credential sharing across origins
+- `credentials: true` allows authentication headers in cross-origin requests only for the configured origin
+
+### Database Security
+- All user input in queries is parameterized (`$1`, `$2`, etc.) to prevent SQL injection
+- Knowledge base data is stored in PostgreSQL's `JSONB` type with size limits enforced at the application level
+- Client access is scoped at the database middleware level — users can only access their own workspace data
 
 ---
 
