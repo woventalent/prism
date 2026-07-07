@@ -8,11 +8,27 @@ const usersRoutes     = require('./routes/users');
 const knowledgeRoutes = require('./routes/knowledge');
 const clientsRoutes   = require('./routes/clients');
 
+// ── Environment Variable Validation ────────────────────────────
+const requiredEnvVars = [
+  'DATABASE_URL',
+  'JWT_SECRET',
+  'CLIENT_ORIGIN',
+  'AZURE_CLIENT_ID',
+  'AZURE_CLIENT_SECRET',
+  'AZURE_TENANT_ID',
+];
+
+const missingVars = requiredEnvVars.filter(v => !process.env[v]);
+if (missingVars.length > 0) {
+  console.error(`❌ Missing required environment variables: ${missingVars.join(', ')}`);
+  process.exit(1);
+}
+
 const app  = express();
 const PORT = process.env.PORT || 4000;
 
 // ── Middleware ─────────────────────────────────────────────────
-app.use(cors({ origin: process.env.CLIENT_ORIGIN || '*', credentials: true }));
+app.use(cors({ origin: process.env.CLIENT_ORIGIN, credentials: true }));
 app.use(express.json());
 
 // Request logger (dev)
