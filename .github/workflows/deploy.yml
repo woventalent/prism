@@ -16,6 +16,10 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
+          port: 22
+          timeout: 30s
+          command_timeout: 10m
+          debug: false
           script: |
             set -e
             cd /var/www/rcc
