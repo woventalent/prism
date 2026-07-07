@@ -8,15 +8,22 @@ const { authenticate } = require('../middleware/auth');
 const TENANT_ID      = process.env.AZURE_TENANT_ID;
 const ALLOWED_DOMAIN = process.env.AZURE_ALLOWED_DOMAIN || 'woventalent.in';
 const REDIRECT_URI   = process.env.AZURE_REDIRECT_URI   || 'http://localhost:4000/api/auth/microsoft/callback';
+const IS_SSO_ENABLED = !!(process.env.AZURE_CLIENT_ID && process.env.AZURE_CLIENT_SECRET && process.env.AZURE_TENANT_ID);
 
-const cca = new msal.ConfidentialClientApplication({
-  auth: {
-    clientId:     process.env.AZURE_CLIENT_ID,
-    authority:    `https://login.microsoftonline.com/${TENANT_ID}`,
-    clientSecret: process.env.AZURE_CLIENT_SECRET,
-  },
-  system: { loggerOptions: { logLevel: msal.LogLevel.Warning } },
-});
+let cca = null;
+function getConfidentialClientApp() {
+  if (!cca && IS_SSO_ENABLED) {
+    cca = new msal.ConfidentialClientApplication({
+      auth: {
+        clientId:     process.env.AZURE_CLIENT_ID,
+        authority:    `https://login.microsoftonline.com/${TENANT_ID}`,
+        clientSecret: process.env.AZURE_CLIENT_SECRET,
+      },
+      system: { loggerOptions: { logLevel: msal.LogLevel.Warning } },
+    });
+  }
+  return cca;
+}
 
 // Short-lived state store to prevent CSRF on the OAuth redirect
 const stateStore = new Map();
@@ -27,12 +34,17 @@ function pruneStates() {
 
 // ── GET /api/auth/microsoft → kick off OAuth ─────────────────
 router.get('/microsoft', async (req, res) => {
+  const ccaInstance = getConfidentialClientApp();
+  if (!ccaInstance) {
+    return res.redirect(`${process.env.CLIENT_ORIGIN}/login?error=sso_not_configured`);
+  }
+
   pruneStates();
   const state = crypto.randomBytes(20).toString('hex');
   stateStore.set(state, Date.now() + 10 * 60 * 1000); // 10 min TTL
 
   try {
-    const url = await cca.getAuthCodeUrl({
+    const url = await ccaInstance.getAuthCodeUrl({
       scopes:      ['openid', 'profile', 'email'],
       redirectUri: REDIRECT_URI,
       state,
@@ -47,6 +59,11 @@ router.get('/microsoft', async (req, res) => {
 
 // ── GET /api/auth/microsoft/callback ─────────────────────────
 router.get('/microsoft/callback', async (req, res) => {
+  const ccaInstance = getConfidentialClientApp();
+  if (!ccaInstance) {
+    return res.redirect(`${process.env.CLIENT_ORIGIN}/login?error=sso_not_configured`);
+  }
+
   const { code, state, error, error_description } = req.query;
   const origin = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
 
@@ -62,7 +79,7 @@ router.get('/microsoft/callback', async (req, res) => {
   stateStore.delete(state);
 
   try {
-    const result = await cca.acquireTokenByCode({
+    const result = await ccaInstance.acquireTokenByCode({
       code,
       scopes:      ['openid', 'profile', 'email'],
       redirectUri: REDIRECT_URI,
