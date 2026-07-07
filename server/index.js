@@ -9,19 +9,20 @@ const knowledgeRoutes = require('./routes/knowledge');
 const clientsRoutes   = require('./routes/clients');
 
 // ── Environment Variable Validation ────────────────────────────
-const requiredEnvVars = [
-  'DATABASE_URL',
-  'JWT_SECRET',
-  'CLIENT_ORIGIN',
-  'AZURE_CLIENT_ID',
-  'AZURE_CLIENT_SECRET',
-  'AZURE_TENANT_ID',
-];
+const coreRequiredVars = ['DATABASE_URL', 'JWT_SECRET', 'CLIENT_ORIGIN'];
+const azureVars = ['AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET', 'AZURE_TENANT_ID'];
 
-const missingVars = requiredEnvVars.filter(v => !process.env[v]);
-if (missingVars.length > 0) {
-  console.error(`❌ Missing required environment variables: ${missingVars.join(', ')}`);
+const missingCoreVars = coreRequiredVars.filter(v => !process.env[v]);
+if (missingCoreVars.length > 0) {
+  console.error(`❌ Missing required environment variables: ${missingCoreVars.join(', ')}`);
   process.exit(1);
+}
+
+// If any Azure variable is set, all must be set (SSO all-or-nothing)
+const setAzureVars = azureVars.filter(v => process.env[v]);
+if (setAzureVars.length > 0 && setAzureVars.length < azureVars.length) {
+  const missingAzureVars = azureVars.filter(v => !process.env[v]);
+  console.warn(`⚠️  Azure SSO partially configured. Missing: ${missingAzureVars.join(', ')}. SSO will not work.`);
 }
 
 const app  = express();
