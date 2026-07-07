@@ -10,21 +10,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
       - name: Deploy to server
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_KEY }}
-          port: 22
-          timeout: 30s
-          command_timeout: 10m
-          debug: false
-          script: |
-            set -e
-            cd /var/www/rcc
-            git pull origin master
-            cd client && npm run build
-            cd ..
-            pm2 restart rcc-api --update-env
-            echo "Deploy complete at $(date)"
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOFSCRIPT'
+          set -e
+          cd /var/www/rcc
+          git pull origin master
+          cd client && npm run build
+          cd ..
+          pm2 restart rcc-api --update-env
+          echo "Deploy complete at $(date)"
+          EOFSCRIPT
