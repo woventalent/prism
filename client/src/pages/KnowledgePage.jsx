@@ -9,7 +9,17 @@ import BUPlanning     from './knowledge/BUPlanning';
 
 const MAX_TABS = 10;
 const TABS_KEY = '_tabs_config';
-const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
+
+// Generate a URL-friendly slug from a name
+const generateSlug = (name) => {
+  return `custom_${name
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, '') // Remove special characters
+    .replace(/\s+/g, '-')     // Replace spaces with hyphens
+    .replace(/-+/g, '-')      // Replace multiple hyphens with single
+    .slice(0, 50)}`;          // Limit to 50 chars after "custom_"
+};
 
 const DEFAULT_TABS = [
   { id: 'company-profile',   name: 'Company Profile',  icon: '🏢', isBuiltIn: true },
@@ -42,7 +52,16 @@ function ManageTabsPanel({ tabs: initial, onSave, onCancel }) {
   const [draft, setDraft] = useState(initial.map(t => ({ ...t })));
 
   function updateField(id, field, val) {
-    setDraft(d => d.map(t => t.id === id ? { ...t, [field]: val } : t));
+    setDraft(d => d.map(t => {
+      if (t.id === id) {
+        // If updating name on a custom tab, regenerate the slug
+        if (field === 'name' && !t.isBuiltIn) {
+          return { ...t, id: generateSlug(val), [field]: val };
+        }
+        return { ...t, [field]: val };
+      }
+      return t;
+    }));
   }
   function move(id, dir) {
     setDraft(d => {
@@ -59,7 +78,7 @@ function ManageTabsPanel({ tabs: initial, onSave, onCancel }) {
   }
   function addTab() {
     if (draft.length >= MAX_TABS) return;
-    setDraft(d => [...d, { id: `custom_${uid()}`, name: 'New Tab', icon: '📄', isBuiltIn: false }]);
+    setDraft(d => [...d, { id: generateSlug('New Tab'), name: 'New Tab', icon: '📄', isBuiltIn: false }]);
   }
 
   const arrowBtn = (disabled) => ({
