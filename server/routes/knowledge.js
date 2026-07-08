@@ -2,15 +2,21 @@ const router = require('express').Router();
 const pool   = require('../db');
 const { authenticate, requireClientAccess, requireClientAdmin } = require('../middleware/auth');
 
-// Valid sections whitelist
-const VALID_SECTIONS = new Set(['company-profile', 'capability-report', 'domain-matrix', 'bu-planning']);
+// Built-in sections whitelist
+const BUILT_IN_SECTIONS = new Set(['company-profile', 'capability-report', 'domain-matrix', 'bu-planning']);
 const MAX_JSONB_SIZE = 1024 * 1024; // 1MB max
+
+// Validate section: must be built-in or a custom tab (starts with 'custom_')
+function isValidSection(section) {
+  if (!section) return false;
+  return BUILT_IN_SECTIONS.has(section) || section.startsWith('custom_');
+}
 
 // Middleware: Validate section parameter
 router.use((req, res, next) => {
   const section = req.params.section;
-  if (section && !VALID_SECTIONS.has(section)) {
-    return res.status(400).json({ error: `Invalid section: ${section}. Must be one of: ${Array.from(VALID_SECTIONS).join(', ')}` });
+  if (section && !isValidSection(section)) {
+    return res.status(400).json({ error: `Invalid section: ${section}. Must be one of: ${Array.from(BUILT_IN_SECTIONS).join(', ')} or a custom tab (custom_*)` });
   }
   next();
 });
