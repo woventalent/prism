@@ -98,6 +98,9 @@ Each client workspace has four knowledge modules with individual URLs:
 | Capability Report | `/w/:clientSlug/capability-report` |
 | Domain Matrix     | `/w/:clientSlug/domain-matrix`     |
 | BU Planning       | `/w/:clientSlug/bu-planning`       |
+| Custom Tabs*      | `/w/:clientSlug/custom_:slug`      |
+
+*Custom tabs have auto-generated URL slugs based on their names
 
 #### Company Profile
 - Rich-text sections and subsections with inline editing
@@ -122,6 +125,16 @@ Each client workspace has four knowledge modules with individual URLs:
 - Per-BU: leader, domains, planning dimensions × year grid
 - Add/remove BUs, dimensions, and year columns
 - Year columns are center-aligned
+
+#### Custom Tabs
+- Workspace admins can create custom tabs via the "Manage Tabs" panel
+- Tab names are converted to **user-friendly URL slugs** (e.g., `Sales Pipeline` → `custom_sales-pipeline`)
+- Slugs are regenerated automatically when tab names change
+- Special characters are removed, spaces become hyphens, max 50 chars per slug
+- Custom tabs reuse the Company Profile component for flexible content storage
+- Up to **10 total tabs** (built-in + custom) per workspace
+- Tab order is fully customizable via drag controls in Manage Tabs
+- **URL pattern:** `/w/:clientSlug/custom_:slug` (e.g., `/w/acme/custom_sales-pipeline`)
 
 ### Download
 - **Download Section** — exports the active tab as a PDF
@@ -158,6 +171,7 @@ Prism uses a three-tier role model:
 /w/:clientSlug/capability-report    → Capability Report
 /w/:clientSlug/domain-matrix        → Domain Matrix
 /w/:clientSlug/bu-planning          → BU Planning
+/w/:clientSlug/custom_:slug         → Custom Tab (e.g., custom_sales-pipeline)
 /w/:clientSlug/settings             → workspace settings (member management)
 ```
 
